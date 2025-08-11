@@ -1,0 +1,200 @@
+/* Company Details Styles */
+.company-details-page {
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+.company-logo-large {
+  position: relative;
+}
+
+.company-logo-large img {
+  border: 3px solid #fff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card {
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+.job-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.job-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+.job-card:hover .fa-chevron-right {
+  transform: translateX(5px);
+}
+
+.fa-chevron-right {
+  transition: transform 0.3s ease;
+}
+
+.nav-tabs {
+  border-bottom: 2px solid #e9ecef;
+}
+
+.nav-tabs .nav-link {
+  border: none;
+  color: #6c757d;
+  font-weight: 500;
+  padding: 12px 20px;
+  transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: transparent;
+  color: #007bff;
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+.nav-tabs .nav-link.active {
+  color: #007bff;
+  background-color: transparent;
+  border-color: transparent transparent #007bff transparent;
+  border-bottom-width: 3px;
+  font-weight: 600;
+}
+
+.card-header {
+  background-color: rgba(0, 123, 255, 0.05);
+  border-bottom: 1px solid #e9ecef;
+}
+
+.card-title {
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.stat-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 6px 12px;
+}
+
+.btn {
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+}
+
+.btn-outline-primary {
+  border: 2px solid #007bff;
+  color: #007bff;
+  font-weight: 500;
+}
+
+.btn-outline-primary:hover {
+  background-color: #007bff;
+  border-color: #007bff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+}
+
+.spinner-border {
+  width: 3rem;
+  height: 3rem;
+}
+
+.empty-state {
+  padding: 60px 20px;
+}
+
+.empty-state .fas {
+  opacity: 0.5;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .company-details-page .container-fluid {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+  
+  .company-logo-large img {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  
+  .card-body {
+    padding: 1.5rem 1rem;
+  }
+  
+  .nav-tabs .nav-link {
+    padding: 10px 15px;
+    font-size: 0.9rem;
+  }
+  
+  .btn {
+    font-size: 0.9rem;
+    padding: 8px 16px;
+  }
+}
+
+@media (max-width: 576px) {
+  .d-flex.gap-2 {
+    flex-direction: column;
+    gap: 10px !important;
+  }
+  
+  .btn {
+    width: 100%;
+  }
+  
+  .row.align-items-center {
+    text-align: center;
+  }
+  
+  .row.align-items-center .col-auto {
+    margin: 0 auto 20px;
+  }
+}
+
+/* Animation for loading states */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.tab-pane {
+  animation: fadeIn 0.4s ease-out;
+}

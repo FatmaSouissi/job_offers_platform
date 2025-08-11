@@ -1,0 +1,567 @@
+<div class="company-dashboard">
+  <!-- Header -->
+  <header class="dashboard-header">
+    <div class="header-content">
+      <h1 class="dashboard-title">
+        <i class="fas fa-building"></i>
+        Company Dashboard
+      </h1>
+      <div class="header-actions">
+        <button class="btn btn-primary create-btn" (click)="createJob()">
+          <i class="fas fa-plus"></i>
+          Post New Job
+        </button>
+        <div class="dropdown">
+          <button class="btn btn-outline menu-btn" (click)="toggleMenu()">
+            <i class="fas fa-ellipsis-v"></i>
+          </button>
+          <div class="dropdown-menu" [class.show]="showMenu">
+            <button class="dropdown-item" (click)="exportJobs()">
+              <i class="fas fa-download"></i>
+              Export Jobs
+            </button>
+            <button class="dropdown-item" (click)="exportApplications()">
+              <i class="fas fa-download"></i>
+              Export Applications
+            </button>
+            <button class="dropdown-item" (click)="viewProfile()">
+              <i class="fas fa-user"></i>
+              Company Profile
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Dashboard Cards -->
+  <section class="dashboard-cards" *ngIf="!loading">
+    <div class="card-grid">
+      <div *ngFor="let card of dashboardCards" class="dashboard-card" [style.--card-color]="card.color">
+        <div class="card-content">
+          <div class="card-header">
+            <div class="card-icon">
+              <i class="fas" [class]="'fa-' + card.icon"></i>
+            </div>
+            <div class="card-trend" *ngIf="card.trend" 
+                 [class.positive]="card.trend.isPositive" 
+                 [class.negative]="!card.trend.isPositive">
+              <i class="fas" [class]="card.trend.isPositive ? 'fa-arrow-up' : 'fa-arrow-down'"></i>
+              <span>{{ card.trend.value }}%</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <h2 class="card-value">{{ card.value }}</h2>
+            <p class="card-title">{{ card.title }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Loading Spinner -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="spinner"></div>
+    <p>Loading dashboard data...</p>
+  </div>
+
+  <!-- Main Content -->
+  <main class="dashboard-content" *ngIf="!loading">
+    <div class="tabs-container">
+      
+      <!-- Tab Navigation -->
+      <nav class="tab-nav">
+        <button class="tab-btn" 
+                [class.active]="selectedTab === 0" 
+                (click)="selectTab(0)">
+          <i class="fas fa-briefcase"></i>
+          My Job Offers
+        </button>
+        <button class="tab-btn" 
+                [class.active]="selectedTab === 1" 
+                (click)="selectTab(1)">
+          <i class="fas fa-file-alt"></i>
+          All Applications
+        </button>
+        <button class="tab-btn" 
+                [class.active]="selectedTab === 2" 
+                (click)="selectTab(2)">
+          <i class="fas fa-chart-bar"></i>
+          Analytics
+        </button>
+      </nav>
+
+      <!-- Tab Content -->
+      <div class="tab-content">
+        
+        <!-- Job Offers Tab -->
+        <div class="tab-panel" [class.active]="selectedTab === 0">
+          
+          <!-- Job Filters -->
+          <div class="filters-card">
+            <div class="filters-row">
+              <div class="form-group search-field">
+                <label for="job-search">Search Jobs</label>
+                <div class="input-group">
+                  <input type="text" 
+                         id="job-search"
+                         [(ngModel)]="searchTerm" 
+                         placeholder="Job title, skills, etc."
+                         class="form-control">
+                  <i class="fas fa-search input-icon"></i>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="job-type-select">Job Type</label>
+                <select id="job-type-select" [(ngModel)]="selectedJobType" class="form-control">
+                  <option value="">All Types</option>
+                  <option *ngFor="let type of jobTypes" [value]="type">
+                    {{ formatJobType(type) }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="job-status-select">Status</label>
+                <select id="job-status-select" [(ngModel)]="selectedJobStatus" class="form-control">
+                  <option value="">All Status</option>
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+              
+              <div class="filter-actions">
+                <button class="btn btn-primary" (click)="applyJobFilters()">
+                  <i class="fas fa-filter"></i>
+                  Apply
+                </button>
+                <button class="btn btn-outline" (click)="clearJobFilters()">
+                  <i class="fas fa-times"></i>
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Jobs Table -->
+          <div class="table-card">
+            <div class="table-header">
+              <h3 class="table-title">My Job Offers</h3>
+              <div class="table-actions" *ngIf="jobsSelection.selected.length > 0">
+                <span class="selection-info">{{ jobsSelection.selected.length }} selected</span>
+                <button class="btn btn-outline" (click)="bulkToggleStatus()">
+                  <i class="fas fa-toggle-on"></i>
+                  Toggle Status
+                </button>
+                <button class="btn btn-danger" (click)="deleteSelectedJobs()">
+                  <i class="fas fa-trash"></i>
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+            
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>
+                      <input type="checkbox" 
+                             (change)="masterToggleJobs()"
+                             [checked]="jobsSelection.hasValue() && isAllJobsSelected()"
+                             [indeterminate]="jobsSelection.hasValue() && !isAllJobsSelected()">
+                    </th>
+                    <th>Job Title</th>
+                    <th>Type</th>
+                    <th>Level</th>
+                    <th>Location</th>
+                    <th>Salary Range</th>
+                    <th>Applications</th>
+                    <th>Status</th>
+                    <th>Posted Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let job of jobsDataSource.data" 
+                      [class.selected]="jobsSelection.isSelected(job)">
+                    <td>
+                      <input type="checkbox"
+                             (change)="jobsSelection.toggle(job)"
+                             [checked]="jobsSelection.isSelected(job)">
+                    </td>
+                    <td>
+                      <div class="job-title">
+                        <strong>{{ job.title }}</strong>
+                        <span class="chip" [class.remote]="job.isRemote">
+                          {{ job.isRemote ? 'Remote' : 'On-site' }}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="chip">{{ formatJobType(job.jobType) }}</span>
+                    </td>
+                    <td>
+                      <span class="chip">{{ formatExperienceLevel(job.experienceLevel) }}</span>
+                    </td>
+                    <td>
+                      <div class="location-info">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>{{ job.location }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="salary-range">
+                        {{ formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency) }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="application-stats">
+                        <span class="stat-badge applications" (click)="viewApplications(job)" title="View Applications">
+                          {{ job.applicationCount || 0 }}
+                        </span>
+                        <div class="application-breakdown" *ngIf="job.applicationCount > 0">
+                          <small class="pending">{{ job.pendingApplications || 0 }} pending</small>
+                          <small class="accepted">{{ job.acceptedApplications || 0 }} accepted</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="toggle-switch">
+                        <input type="checkbox" 
+                               [id]="'toggle-' + job.id"
+                               [checked]="job.isActive"
+                               (change)="toggleJobStatus(job)">
+                        <label [for]="'toggle-' + job.id" class="switch"></label>
+                        <span class="status-text" [class.active]="job.isActive">
+                          {{ job.isActive ? 'Active' : 'Inactive' }}
+                        </span>
+                      </div>
+                    </td>
+                    <td>{{ job.createdAt | date:'mediumDate' }}</td>
+                    <td>
+                      <div class="action-buttons">
+                        <button class="btn-icon" (click)="editJob(job)" title="Edit Job">
+                          <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-icon" (click)="viewApplications(job)" title="View Applications">
+                          <i class="fas fa-users"></i>
+                        </button>
+                        <button class="btn-icon" (click)="duplicateJob(job)" title="Duplicate Job">
+                          <i class="fas fa-copy"></i>
+                        </button>
+                        <button class="btn-icon danger" (click)="deleteJob(job)" title="Delete Job">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="pagination-container">
+              <div class="pagination-info">
+                Showing {{ getStartIndex() }} to {{ getEndIndex() }} of {{ totalJobs }} jobs
+              </div>
+              <div class="pagination">
+                <button class="btn-page" (click)="previousPage()" [disabled]="currentPage === 1">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="page-numbers">
+                  <button *ngFor="let page of getPageNumbers()" 
+                          class="btn-page" 
+                          [class.active]="page === currentPage"
+                          (click)="goToPage(page)">
+                    {{ page }}
+                  </button>
+                </span>
+                <button class="btn-page" (click)="nextPage()" [disabled]="currentPage === totalPages">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Applications Tab -->
+        <div class="tab-panel" [class.active]="selectedTab === 1">
+          
+          <!-- Application Filters -->
+          <div class="filters-card">
+            <div class="filters-row">
+              <div class="form-group search-field">
+                <label for="application-search">Search Applications</label>
+                <div class="input-group">
+                  <input type="text" 
+                         id="application-search"
+                         [(ngModel)]="applicationSearchTerm" 
+                         placeholder="Applicant name, email, job title..."
+                         class="form-control">
+                  <i class="fas fa-search input-icon"></i>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="status-select">Application Status</label>
+                <select id="status-select" [(ngModel)]="selectedApplicationStatus" class="form-control">
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="reviewed">Reviewed</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="job-filter-select">Filter by Job</label>
+                <select id="job-filter-select" [(ngModel)]="selectedJobFilter" class="form-control">
+                  <option value="">All Jobs</option>
+                  <option *ngFor="let job of jobsDataSource.data" [value]="job.id">
+                    {{ job.title }}
+                  </option>
+                </select>
+              </div>
+              
+              <div class="filter-actions">
+                <button class="btn btn-primary" (click)="applyApplicationFilters()">
+                  <i class="fas fa-filter"></i>
+                  Apply
+                </button>
+                <button class="btn btn-outline" (click)="clearApplicationFilters()">
+                  <i class="fas fa-times"></i>
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Applications Table -->
+          <div class="table-card">
+            <div class="table-header">
+              <h3 class="table-title">Job Applications</h3>
+              <div class="table-actions" *ngIf="applicationsSelection.selected.length > 0">
+                <span class="selection-info">{{ applicationsSelection.selected.length }} selected</span>
+                <div class="bulk-actions">
+                  <button class="btn btn-success" (click)="bulkUpdateStatus('accepted')">
+                    <i class="fas fa-check"></i>
+                    Accept
+                  </button>
+                  <button class="btn btn-warning" (click)="bulkUpdateStatus('reviewed')">
+                    <i class="fas fa-eye"></i>
+                    Mark Reviewed
+                  </button>
+                  <button class="btn btn-danger" (click)="bulkUpdateStatus('rejected')">
+                    <i class="fas fa-times"></i>
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>
+                      <input type="checkbox" 
+                             (change)="masterToggleApplications()"
+                             [checked]="applicationsSelection.hasValue() && isAllApplicationsSelected()"
+                             [indeterminate]="applicationsSelection.hasValue() && !isAllApplicationsSelected()">
+                    </th>
+                    <th>Applicant</th>
+                    <th>Job Position</th>
+                    <th>Experience</th>
+                    <th>Contact</th>
+                    <th>Resume</th>
+                    <th>Status</th>
+                    <th>Applied Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let application of applicationsDataSource.data" 
+                      [class.selected]="applicationsSelection.isSelected(application)">
+                    <td>
+                      <input type="checkbox"
+                             (change)="applicationsSelection.toggle(application)"
+                             [checked]="applicationsSelection.isSelected(application)">
+                    </td>
+                    <td>
+                      <div class="applicant-info">
+                        <strong>{{ application.firstName }} {{ application.lastName }}</strong>
+                        <div class="applicant-details" *ngIf="application.applicant">
+                          <small *ngIf="application.applicant.bio" class="bio">{{ application.applicant.bio | slice:0:50 }}...</small>
+                          <div class="skills" *ngIf="application.applicant.skills">
+                            <span *ngFor="let skill of application.applicant.skills.slice(0, 3)" class="skill-tag">{{ skill }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="job-info">
+                        <strong>{{ application.job.title }}</strong>
+                        <small>{{ application.job.companyName }}</small>
+                      </div>
+                    </td>
+                    <td>
+                      <span *ngIf="application.applicant?.experienceYears" class="experience-badge">
+                        {{ application.applicant.experienceYears }} years
+                      </span>
+                      <span *ngIf="!application.applicant?.experienceYears" class="no-data">N/A</span>
+                    </td>
+                    <td>
+                      <div class="contact-info">
+                        <div class="email">
+                          <i class="fas fa-envelope"></i>
+                          <a [href]="'mailto:' + application.email">{{ application.email }}</a>
+                        </div>
+                        <div class="phone" *ngIf="application.phone">
+                          <i class="fas fa-phone"></i>
+                          <span>{{ application.phone }}</span>
+                        </div>
+                        <div class="social-links" *ngIf="application.applicant">
+                          <a *ngIf="application.applicant.linkedinUrl" [href]="application.applicant.linkedinUrl" target="_blank" class="social-link">
+                            <i class="fab fa-linkedin"></i>
+                          </a>
+                          <a *ngIf="application.applicant.portfolioUrl" [href]="application.applicant.portfolioUrl" target="_blank" class="social-link">
+                            <i class="fas fa-globe"></i>
+                          </a>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <button *ngIf="application.resumeFile" 
+                              class="btn btn-sm btn-outline"
+                              (click)="downloadResume(application.resumeFile)">
+                        <i class="fas fa-download"></i>
+                        Download
+                      </button>
+                      <span *ngIf="!application.resumeFile" class="no-data">No resume</span>
+                    </td>
+                    <td>
+                      <select class="status-select" 
+                              [value]="application.status"
+                              (change)="updateApplicationStatus(application, $event)">
+                        <option value="pending">Pending</option>
+                        <option value="reviewed">Reviewed</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </td>
+                    <td>{{ application.appliedAt | date:'mediumDate' }}</td>
+                    <td>
+                      <div class="action-buttons">
+                        <button class="btn-icon" (click)="viewApplicationDetails(application)" title="View Details">
+                          <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-icon" (click)="contactApplicant(application)" title="Contact Applicant">
+                          <i class="fas fa-envelope"></i>
+                        </button>
+                        <button class="btn-icon danger" (click)="deleteApplication(application)" title="Delete Application">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Applications Pagination -->
+            <div class="pagination-container">
+              <div class="pagination-info">
+                Showing {{ getApplicationStartIndex() }} to {{ getApplicationEndIndex() }} of {{ totalApplications }} applications
+              </div>
+              <div class="pagination">
+                <button class="btn-page" (click)="previousApplicationPage()" [disabled]="currentApplicationPage === 1">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="page-numbers">
+                  <button *ngFor="let page of getApplicationPageNumbers()" 
+                          class="btn-page" 
+                          [class.active]="page === currentApplicationPage"
+                          (click)="goToApplicationPage(page)">
+                    {{ page }}
+                  </button>
+                </span>
+                <button class="btn-page" (click)="nextApplicationPage()" [disabled]="currentApplicationPage === totalApplicationPages">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div class="tab-panel" [class.active]="selectedTab === 2">
+          <div class="analytics-grid">
+            
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Application Trends</h3>
+                <i class="fas fa-chart-line card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="chart-placeholder">
+                  <i class="fas fa-chart-area"></i>
+                  <p>Application trends over time</p>
+                  <small>Based on your job postings data</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Job Performance</h3>
+                <i class="fas fa-briefcase card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="chart-placeholder">
+                  <i class="fas fa-chart-bar"></i>
+                  <p>Top performing job postings</p>
+                  <small>Applications per job offer</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Application Status</h3>
+                <i class="fas fa-chart-pie card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="chart-placeholder">
+                  <i class="fas fa-chart-donut"></i>
+                  <p>Application status distribution</p>
+                  <small>Pending, Reviewed, Accepted, Rejected</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Recent Activity</h3>
+                <i class="fas fa-clock card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="recent-activity">
+                  <div class="activity-item" *ngFor="let activity of recentActivities">
+                    <div class="activity-icon">
+                      <i class="fas" [class]="activity.icon"></i>
+                    </div>
+                    <div class="activity-content">
+                      <p class="activity-text">{{ activity.text }}</p>
+                      <small class="activity-time">{{ activity.time | date:'short' }}</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

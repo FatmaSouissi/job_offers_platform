@@ -1,0 +1,191 @@
+<!-- jobs.html -->
+<div class="jobs-container">
+  <div class="jobs-header">
+    <h1>Offres d'emploi et stages</h1>
+    <button class="refresh-btn" (click)="refreshJobs()" [disabled]="loading">
+      {{ loading ? 'Chargement...' : 'Actualiser' }}
+    </button>
+  </div>
+
+  <!-- Search and Filters Section -->
+  <div class="filters-section">
+    <div class="search-bar">
+      <input 
+        type="text" 
+        placeholder="Rechercher par titre, description, compétences..." 
+        [value]="filters.search || ''"
+        (input)="onSearch($any($event.target).value)"
+        class="search-input"
+      >
+    </div>
+
+    <div class="filters-row">
+      <div class="filter-group">
+        <label for="job-type-filter">Type d'emploi:</label>
+        <select id="job-type-filter" [(ngModel)]="filters.jobType" (change)="filterJobs()">
+          <option value="">Tous</option>
+          <option value="full-time">Temps plein</option>
+          <option value="part-time">Temps partiel</option>
+          <option value="contract">Contrat</option>
+          <option value="internship">Stage</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="location-filter">Localisation:</label>
+        <select id="location-filter" [(ngModel)]="filters.location" (change)="filterJobs()">
+          <option value="">Toutes</option>
+          <option *ngFor="let location of getAvailableLocations()" [value]="location">
+            {{ location }}
+          </option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="experience-filter">Niveau d'expérience:</label>
+        <select id="experience-filter" [(ngModel)]="filters.experienceLevel" (change)="filterJobs()">
+          <option value="">Tous</option>
+          <option value="entry">Débutant</option>
+          <option value="mid">Intermédiaire</option>
+          <option value="senior">Expérimenté</option>
+          <option value="executive">Cadre supérieur</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="remote-filter">Télétravail:</label>
+        <select id="remote-filter" [(ngModel)]="filters.isRemote" (change)="filterJobs()">
+          <option value="">Tous</option>
+          <option [value]="true">Oui</option>
+          <option [value]="false">Non</option>
+        </select>
+      </div>
+
+      <button class="clear-filters-btn" (click)="clearFilters()">
+        Effacer les filtres
+      </button>
+    </div>
+  </div>
+
+  <!-- Sort Options -->
+  <div class="sort-section">
+    <span>Trier par:</span>
+    <button class="sort-btn" (click)="sortByDate()">Date</button>
+    <button class="sort-btn" (click)="sortByCompany()">Entreprise</button>
+    <button class="sort-btn" (click)="sortByType()">Type</button>
+  </div>
+
+  <!-- Job Count -->
+  <div class="job-count">
+    <span>{{ jobs.length }} offre(s) trouvée(s)</span>
+    <span *ngIf="jobs.length > 0" class="count-details">
+      ({{ getJobCountByType().jobs }} emplois, {{ getJobCountByType().internships }} stages)
+    </span>
+  </div>
+
+  <!-- Error Message -->
+  <div *ngIf="error" class="error-message">
+    {{ error }}
+  </div>
+
+  <!-- Loading Spinner -->
+  <div *ngIf="loading" class="loading-spinner">
+    <i class="fas fa-spinner fa-spin"></i>
+    Chargement des offres...
+  </div>
+
+  <!-- Jobs List -->
+  <div class="jobs-list" *ngIf="!loading">
+    <div *ngIf="jobs.length === 0 && !error" class="no-jobs">
+      Aucune offre trouvée pour les critères sélectionnés.
+    </div>
+
+    <div class="job-card" *ngFor="let job of jobs" (click)="viewJob(job)">
+      <div class="job-header">
+        <h3 class="job-title">{{ job.title }}</h3>
+        <span class="job-type" [ngClass]="'type-' + job.jobType">
+          {{ formatJobType(job.jobType) }}
+        </span>
+        <span *ngIf="isNewJob(job.createdAt)" class="new-badge">Nouveau</span>
+        <span *ngIf="job.isRemote" class="remote-badge">
+          <i class="fas fa-home"></i> Télétravail
+        </span>
+      </div>
+
+      <div class="job-company">
+        <strong>{{ getCompanyName(job) }}</strong>
+      </div>
+
+      <div class="job-location">
+        <i class="fas fa-map-marker-alt"></i> {{ job.location }}
+      </div>
+
+      <div class="job-description">
+        {{ getTruncatedDescription(job.description) }}
+      </div>
+
+      <!-- Experience Level -->
+      <div class="job-experience" *ngIf="job.experienceLevel">
+        <i class="fas fa-user-graduate"></i>
+        {{ formatExperienceLevel(job.experienceLevel) }}
+      </div>
+
+      <!-- Salary Information -->
+      <div class="job-salary" *ngIf="job.salaryMin || job.salaryMax">
+        <i class="fas fa-money-bill-wave"></i>
+        {{ formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency) }}
+      </div>
+
+      <!-- Application Deadline  *ngIf="getDaysUntilDeadline(job.applicationDeadline)! > 0" -->
+      <div class="job-deadline" *ngIf="job.applicationDeadline">
+        <i class="fas fa-calendar-alt"></i>
+        <span [ngClass]="{'deadline-urgent': getDaysUntilDeadline(job.applicationDeadline)! <= 7}">
+          Candidature avant le {{ job.applicationDeadline | date:'dd/MM/yyyy' }}
+          <span >
+            ({{ getDaysUntilDeadline(job.applicationDeadline) }} jours restants)
+          </span>
+        </span>
+      </div>
+
+      <div class="job-footer">
+        <span class="job-date">{{ getJobPostingDate(job.createdAt) }}</span>
+        <div class="job-actions">
+          <button class="view-btn" (click)="viewJob(job); $event.stopPropagation()">
+            <i class="fas fa-eye"></i> Voir l'offre
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pagination (if needed) -->
+  <div class="pagination-section" *ngIf="totalJobs > filters.limit!">
+    <nav aria-label="Job pagination">
+      <ul class="pagination">
+        <li class="page-item" [class.disabled]="filters.page === 1">
+          <button class="page-link" (click)="onPageChange(filters.page! - 1)" [disabled]="filters.page === 1">
+            Précédent
+          </button>
+        </li>
+        <li class="page-item active">
+          <span class="page-link">{{ filters.page }} / {{ Math.ceil(totalJobs / filters.limit!) }}</span>
+        </li>
+        <li class="page-item" [class.disabled]="filters.page! >= Math.ceil(totalJobs / filters.limit!)">
+          <button class="page-link" (click)="onPageChange(filters.page! + 1)" 
+                  [disabled]="filters.page! >= Math.ceil(totalJobs / filters.limit!)">
+            Suivant
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
+
+  <!-- Export Button -->
+  <div class="export-section" *ngIf="jobs.length > 0">
+    <button class="export-btn" (click)="exportJobs()">
+      <i class="fas fa-download"></i>
+      Exporter les données
+    </button>
+  </div>
+</div>
+

@@ -1,0 +1,511 @@
+<div class="admin-dashboard">
+  <!-- Header -->
+  <header class="dashboard-header">
+    <div class="header-content">
+      <h1 class="dashboard-title">
+        <i class="fas fa-tachometer-alt"></i>
+        Admin Dashboard
+      </h1>
+      <div class="header-actions">
+        <button class="btn btn-primary create-btn" (click)="createCompany()">
+          <i class="fas fa-plus"></i>
+          Add Company
+        </button>
+        <div class="dropdown">
+          <button class="btn btn-outline menu-btn" (click)="toggleMenu()">
+            <i class="fas fa-ellipsis-v"></i>
+          </button>
+          <div class="dropdown-menu" [class.show]="showMenu">
+            <button class="dropdown-item" (click)="exportCompanies()">
+              <i class="fas fa-download"></i>
+              Export Companies
+            </button>
+            <button class="dropdown-item" (click)="exportJobs()">
+              <i class="fas fa-download"></i>
+              Export Jobs
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Dashboard Cards -->
+  <section class="dashboard-cards" *ngIf="!loading">
+    <div class="card-grid">
+      <div *ngFor="let card of dashboardCards" class="dashboard-card" [style.--card-color]="card.color">
+        <div class="card-content">
+          <div class="card-header">
+            <div class="card-icon">
+              <i class="fas" [class]="'fa-' + card.icon"></i>
+            </div>
+            <div class="card-trend" *ngIf="card.trend" 
+                 [class.positive]="card.trend.isPositive" 
+                 [class.negative]="!card.trend.isPositive">
+              <i class="fas" [class]="card.trend.isPositive ? 'fa-arrow-up' : 'fa-arrow-down'"></i>
+              <span>{{ card.trend.value }}%</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <h2 class="card-value">{{ card.value }}</h2>
+            <p class="card-title">{{ card.title }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Loading Spinner -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="spinner"></div>
+    <p>Loading dashboard data...</p>
+  </div>
+
+  <!-- Main Content -->
+  <main class="dashboard-content" *ngIf="!loading">
+    <div class="tabs-container">
+      
+      <!-- Tab Navigation -->
+      <nav class="tab-nav">
+        <button class="tab-btn" 
+                [class.active]="selectedTab === 0" 
+                (click)="selectTab(0)">
+          <i class="fas fa-building"></i>
+          Companies
+        </button> 
+        <button class="tab-btn" 
+                [class.active]="selectedTab === 1" 
+                (click)="selectTab(1)">
+          <i class="fas fa-briefcase"></i>
+          Job Offers
+        </button>
+        <button class="tab-btn" 
+                [class.active]="selectedTab === 2" 
+                (click)="selectTab(2)">
+          <i class="fas fa-chart-line"></i>
+          Analytics
+        </button>
+      </nav>
+
+      <!-- Tab Content -->
+      <div class="tab-content">
+        
+        <!-- Companies Tab -->
+        <div class="tab-panel" [class.active]="selectedTab === 0">
+          
+          <!-- Filters -->
+          <div class="filters-card">
+            <div class="filters-row">
+              <div class="form-group search-field">
+                <label for="company-search">Search Companies</label>
+                <div class="input-group">
+                  <input type="text" 
+                         id="company-search"
+                         [(ngModel)]="searchTerm" 
+                         placeholder="Company name, industry, etc."
+                         class="form-control">
+                  <i class="fas fa-search input-icon"></i>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="industry-select">Industry</label>
+                <select id="industry-select" [(ngModel)]="selectedIndustry" class="form-control">
+                  <option value="">All Industries</option>
+                  <option *ngFor="let industry of industries" [value]="industry">
+                    {{ industry }}
+                  </option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="size-select">Company Size</label>
+                <select id="size-select" [(ngModel)]="selectedCompanySize" class="form-control">
+                  <option value="">All Sizes</option>
+                  <option *ngFor="let size of companySizes" [value]="size">
+                    {{ size }} employees
+                  </option>
+                </select>
+              </div>
+              
+              <div class="filter-actions">
+                <button class="btn btn-primary" (click)="applyCompanyFilter()">
+                  <i class="fas fa-filter"></i>
+                  Apply
+                </button>
+                <button class="btn btn-outline" (click)="clearFilters()">
+                  <i class="fas fa-times"></i>
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Companies Table -->
+          <div class="table-card">
+            <div class="table-header">
+              <h3 class="table-title">Companies Management</h3>
+              <div class="table-actions" *ngIf="companiesSelection.selected.length > 0">
+                <span class="selection-info">{{ companiesSelection.selected.length }} selected</span>
+                <button class="btn btn-danger" (click)="deleteSelectedCompanies()">
+                  <i class="fas fa-trash"></i>
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+            
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>
+                      <input type="checkbox" 
+                             (change)="masterToggleCompanies()"
+                             [checked]="companiesSelection.hasValue() && isAllCompaniesSelected()"
+                             [indeterminate]="companiesSelection.hasValue() && !isAllCompaniesSelected()">
+                    </th>
+                    <th>Logo</th>
+                    <th>Company</th>
+                    <th>Industry</th>
+                    <th>Size</th>
+                    <th>Total Jobs</th>
+                    <th>Active Jobs</th>
+                    <th>Applications</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let company of companiesDataSource.data" 
+                      [class.selected]="companiesSelection.isSelected(company)">
+                    <td>
+                      <input type="checkbox"
+                             (change)="companiesSelection.toggle(company)"
+                             [checked]="companiesSelection.isSelected(company)">
+                    </td>
+                    <td>
+                      <div class="company-logo">
+                        <img *ngIf="company.logo" [src]="company.logo" [alt]="company.companyName">
+                        <div *ngIf="!company.logo" class="logo-placeholder">
+                          {{ company.companyName.charAt(0) }}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="company-info">
+                        <strong>{{ company.companyName }}</strong>
+                        <small *ngIf="company.city">{{ company.city }}, {{ company.country }}</small>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="chip">{{ company.industry }}</span>
+                    </td>
+                    <td>{{ company.companySize }}</td>
+                    <td>
+                      <span class="stat-badge">{{ company.jobCount }}</span>
+                    </td>
+                    <td>
+                      <span class="stat-badge active">{{ company.activeJobCount }}</span>
+                    </td>
+                    <td>
+                      <span class="stat-badge applications">{{ company.totalApplications }}</span>
+                    </td>
+                    <td>{{ company.createdAt | date:'mediumDate' }}</td>
+                    <td>
+                      <div class="action-buttons">
+                        <button class="btn-icon" (click)="editCompany(company)" title="Edit">
+                          <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-icon danger" (click)="deleteCompany(company)" title="Delete">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="pagination-container">
+              <div class="pagination-info">
+                Showing {{ (currentPage - 1) * pageSize + 1 }} to {{ Math.min(currentPage * pageSize, totalItems) }} of {{ totalItems }} entries
+              </div>
+              <div class="pagination">
+                <button class="btn-page" (click)="previousPage()" [disabled]="currentPage === 1">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="page-numbers">
+                  <button *ngFor="let page of getPageNumbers()" 
+                          class="btn-page" 
+                          [class.active]="page === currentPage"
+                          (click)="goToPage(page)">
+                    {{ page }}
+                  </button>
+                </span>
+                <button class="btn-page" (click)="nextPage()" [disabled]="currentPage === totalPages">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Job Offers Tab -->
+        <div class="tab-panel" [class.active]="selectedTab === 1">
+          
+          <!-- Job Filters -->
+          <div class="filters-card">
+            <div class="filters-row">
+              <div class="form-group search-field">
+                <label for="job-search">Search Jobs</label>
+                <div class="input-group">
+                  <input type="text" 
+                         id="job-search"
+                         [(ngModel)]="searchTerm" 
+                         placeholder="Job title, company, skills..."
+                         class="form-control">
+                  <i class="fas fa-search input-icon"></i>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="job-type-select">Job Type</label>
+                <select id="job-type-select" [(ngModel)]="selectedJobType" class="form-control">
+                  <option value="">All Types</option>
+                  <option *ngFor="let type of jobTypes" [value]="type">
+                    {{ formatJobType(type) }}
+                  </option>
+                </select>
+              </div>
+              
+              <div class="filter-actions">
+                <button class="btn btn-primary" (click)="applyJobFilter()">
+                  <i class="fas fa-filter"></i>
+                  Apply
+                </button>
+                <button class="btn btn-outline" (click)="clearFilters()">
+                  <i class="fas fa-times"></i>
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Jobs Table -->
+          <div class="table-card">
+            <div class="table-header">
+              <h3 class="table-title">Job Offers Management</h3>
+              <div class="table-actions" *ngIf="jobsSelection.selected.length > 0">
+                <span class="selection-info">{{ jobsSelection.selected.length }} selected</span>
+                <button class="btn btn-danger" (click)="deleteSelectedJobs()">
+                  <i class="fas fa-trash"></i>
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+            
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>
+                      <input type="checkbox" 
+                             (change)="masterToggleJobs()"
+                             [checked]="jobsSelection.hasValue() && isAllJobsSelected()"
+                             [indeterminate]="jobsSelection.hasValue() && !isAllJobsSelected()">
+                    </th>
+                    <th>Job Title</th>
+                    <th>Company</th>
+                    <th>Type</th>
+                    <th>Level</th>
+                    <th>Location</th>
+                    <th>Salary</th>
+                    <th>Applications</th>
+                    <th>Status</th>
+                    <th>Posted</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let job of jobsDataSource.data" 
+                      [class.selected]="jobsSelection.isSelected(job)">
+                    <td>
+                      <input type="checkbox"
+                             (change)="jobsSelection.toggle(job)"
+                             [checked]="jobsSelection.isSelected(job)">
+                    </td>
+                    <td>
+                      <div class="job-title">
+                        <strong>{{ job.title }}</strong>
+                        <span class="chip" [class.remote]="job.isRemote">
+                          {{ job.isRemote ? 'Remote' : 'On-site' }}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="company-info">
+                        <img *ngIf="job.companyLogo" [src]="job.companyLogo" class="company-mini-logo">
+                        <span>{{ job.companyName }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="chip">{{ formatJobType(job.jobType) }}</span>
+                    </td>
+                    <td>
+                      <span class="chip">{{ formatExperienceLevel(job.experienceLevel) }}</span>
+                    </td>
+                    <td>
+                      <div class="location-info">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>{{ job.location }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="salary-range">
+                        {{ formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency) }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="stat-badge applications">{{ job.applicationCount || 0 }}</span>
+                    </td>
+                    <td>
+                      <div class="toggle-switch">
+                        <input type="checkbox" 
+                               [id]="'toggle-' + job.id"
+                               [checked]="job.isActive"
+                               (change)="toggleJobStatus(job)">
+                        <label [for]="'toggle-' + job.id" class="switch"></label>
+                        <span class="status-text" [class.active]="job.isActive">
+                          {{ job.isActive ? 'Active' : 'Inactive' }}
+                        </span>
+                      </div>
+                    </td>
+                    <td>{{ job.createdAt | date:'mediumDate' }}</td>
+                    <td>
+                      <div class="action-buttons">
+                        <button class="btn-icon" (click)="viewJobDetails(job)" title="View Details">
+                          <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-icon danger" (click)="deleteJob(job)" title="Delete">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div class="tab-panel" [class.active]="selectedTab === 2">
+          <div class="analytics-grid">
+            
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Company Growth</h3>
+                <i class="fas fa-chart-line card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="chart-placeholder">
+                  <i class="fas fa-chart-area"></i>
+                  <p>Company registration trends chart would go here</p>
+                  <div class="mock-chart">
+                    <div class="chart-bars">
+                      <div class="bar" style="height: 60%"></div>
+                      <div class="bar" style="height: 80%"></div>
+                      <div class="bar" style="height: 45%"></div>
+                      <div class="bar" style="height: 90%"></div>
+                      <div class="bar" style="height: 70%"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Job Posting Activity</h3>
+                <i class="fas fa-briefcase card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="chart-placeholder">
+                  <i class="fas fa-chart-line"></i>
+                  <p>Job posting activity chart would go here</p>
+                  <div class="mock-chart">
+                    <div class="line-chart">
+                      <svg viewBox="0 0 200 100" class="chart-svg">
+                        <polyline points="0,80 40,65 80,45 120,55 160,30 200,40" 
+                                  fill="none" 
+                                  stroke="#667eea" 
+                                  stroke-width="3"/>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Application Trends</h3>
+                <i class="fas fa-users card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="chart-placeholder">
+                  <i class="fas fa-chart-pie"></i>
+                  <p>Application trends chart would go here</p>
+                  <div class="mock-chart">
+                    <div class="pie-chart">
+                      <div class="pie-segment" style="--percentage: 35; --color: #667eea"></div>
+                      <div class="pie-segment" style="--percentage: 25; --color: #764ba2"></div>
+                      <div class="pie-segment" style="--percentage: 40; --color: #f093fb"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-card">
+              <div class="card-header">
+                <h3 class="card-title">Industry Distribution</h3>
+                <i class="fas fa-industry card-icon"></i>
+              </div>
+              <div class="card-body">
+                <div class="chart-placeholder">
+                  <i class="fas fa-chart-donut"></i>
+                  <p>Industry distribution chart would go here</p>
+                  <div class="industry-stats">
+                    <div class="stat-item">
+                      <span class="stat-label">Technology</span>
+                      <div class="stat-bar">
+                        <div class="stat-fill" style="width: 65%"></div>
+                      </div>
+                      <span class="stat-value">65%</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">Finance</span>
+                      <div class="stat-bar">
+                        <div class="stat-fill" style="width: 20%"></div>
+                      </div>
+                      <span class="stat-value">20%</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">Healthcare</span>
+                      <div class="stat-bar">
+                        <div class="stat-fill" style="width: 15%"></div>
+                      </div>
+                      <span class="stat-value">15%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

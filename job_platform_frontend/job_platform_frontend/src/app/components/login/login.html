@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Authentification - Job Platform</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  
+ 
+</head>
+<body>
+  <div class="floating-shapes">
+    <div class="shape"></div>
+    <div class="shape"></div>
+    <div class="shape"></div>
+  </div>
+
+  <div class="auth-container">
+    <!-- Login Form -->
+    <div id="loginForm" class="card auth-card">
+      <div class="auth-header">
+        <div class="auth-icon">
+          <i class="fas fa-sign-in-alt"></i>
+        </div>
+        <h3>Bon retour !</h3>
+        <p>Connectez-vous à votre compte</p>
+      </div>
+      
+      <div class="auth-form">
+        <!-- Login Error Message -->
+        <div id="loginError" class="alert alert-danger hidden" role="alert">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <span id="loginErrorText"></span>
+        </div>
+        
+        <form id="loginFormElement" (ngSubmit)="onSubmit()">
+          <div class="form-group">
+            <label for="loginEmail" class="form-label">
+              <i class="fas fa-envelope"></i>
+              Adresse email
+            </label>
+            <input 
+              [(ngModel)]="loginData.email"
+              type="email" 
+              id="loginEmail"
+              class="form-control" 
+              name="email"
+              required
+              placeholder="votre.email@exemple.com"
+            >
+            <div id="loginEmailError" class="text-danger hidden">
+              <i class="fas fa-exclamation-circle"></i>
+              L'email est requis
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="loginPassword" class="form-label">
+              <i class="fas fa-lock"></i>
+              Mot de passe
+            </label>
+            <input 
+              [(ngModel)]="loginData.password"
+              type="password" 
+              id="loginPassword"
+              class="form-control" 
+              name="password"
+              required
+              placeholder="••••••••"
+            >
+            <div id="loginPasswordError" class="text-danger hidden">
+              <i class="fas fa-exclamation-circle"></i>
+              Le mot de passe est requis
+            </div>
+          </div>
+          
+          <button type="submit" class="btn btn-primary" id="loginSubmitBtn" [disabled]="isLoading">
+            <span id="loginSpinner" class="spinner-border spinner-border-sm me-2 hidden" role="status"></span>
+            <i id="loginIcon" class="fas fa-rocket me-2"></i>
+            <span id="loginBtnText">{{ isLoading ? 'Connexion...' : 'Se connecter' }}</span>
+          </button>
+        </form>
+        
+        <div class="auth-link">
+          <p>Nouveau sur Job Platform ?</p>
+          <a href="#" id="showRegisterBtn" routerLink="/register" routerLinkActive="active">
+            <i class="fas fa-user-plus me-2"></i>
+            Créer un compte
+          </a>
+        </div>
+      </div>
+    </div>
+
+    
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script>
+    // Form elements
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const showRegisterBtn = document.getElementById('showRegisterBtn');
+    const showLoginBtn = document.getElementById('showLoginBtn');
+    
+    // Form switching
+    showRegisterBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      loginForm.classList.add('hidden');
+      registerForm.classList.remove('hidden');
+      registerForm.classList.add('fade-in');
+    });
+    
+    showLoginBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      registerForm.classList.add('hidden');
+      loginForm.classList.remove('hidden');
+      loginForm.classList.add('fade-in');
+    });
+    
+    // Login form handling
+    const loginFormElement = document.getElementById('loginFormElement');
+    const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+    const loginSpinner = document.getElementById('loginSpinner');
+    const loginIcon = document.getElementById('loginIcon');
+    const loginBtnText = document.getElementById('loginBtnText');
+    const loginError = document.getElementById('loginError');
+    const loginErrorText = document.getElementById('loginErrorText');
+    
+    loginFormElement.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      
+      // Clear previous errors
+      hideError('loginError');
+      hideFieldError('loginEmailError');
+      hideFieldError('loginPasswordError');
+      
+      // Validation
+      let hasErrors = false;
+      
+      if (!email) {
+        showFieldError('loginEmailError');
+        hasErrors = true;
+      }
+      
+      if (!password) {
+        showFieldError('loginPasswordError');
+        hasErrors = true;
+      }
+      
+      if (hasErrors) return;
+      
+      // Show loading state
+      setLoadingState(loginSubmitBtn, loginSpinner, loginIcon, loginBtnText, 'Connexion...');
+      
+      // Simulate API call
+      setTimeout(() => {
+        // Reset loading state
+        resetLoadingState(loginSubmitBtn, loginSpinner, loginIcon, loginBtnText, 'Se connecter');
+        
+        // Simulate success or error
+        if (email === 'test@example.com' && password === 'password') {
+          console.log('Login successful');
+          showSuccess('Connexion réussie !');
+        } else {
+          showError('loginError', loginErrorText, 'Email ou mot de passe incorrect');
+        }
+      }, 2000);
+    });
+    
+    
+    // Password confirmation validation
+    document.getElementById('confirmPassword').addEventListener('input', (e) => {
+      const password = document.getElementById('registerPassword').value;
+      const confirmPassword = e.target.value;
+      
+      if (confirmPassword && password !== confirmPassword) {
+        showFieldError('confirmPasswordError', 'confirmPasswordErrorText', 'Les mots de passe ne correspondent pas');
+      } else {
+        hideFieldError('confirmPasswordError');
+      }
+    });
+    
+    // Utility functions
+    function setLoadingState(btn, spinner, icon, text, loadingText) {
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      icon.classList.add('hidden');
+      text.textContent = loadingText;
+    }
+    
+    function resetLoadingState(btn, spinner, icon, text, defaultText) {
+      btn.disabled = false;
+      spinner.classList.add('hidden');
+      icon.classList.remove('hidden');
+      text.textContent = defaultText;
+    }
+    
+    function showError(errorId, textId, message) {
+      const errorElement = document.getElementById(errorId);
+      const textElement = document.getElementById(textId);
+      textElement.textContent = message;
+      errorElement.classList.remove('hidden');
+    }
+    
+    function hideError(errorId) {
+      document.getElementById(errorId).classList.add('hidden');
+    }
+    
+    function showFieldError(errorId, textId = null, message = null) {
+      const errorElement = document.getElementById(errorId);
+      if (textId && message) {
+        document.getElementById(textId).textContent = message;
+      }
+      errorElement.classList.remove('hidden');
+    }
+    
+    function hideFieldError(errorId) {
+      document.getElementById(errorId).classList.add('hidden');
+    }
+    
+    function hideAllFieldErrors() {
+      const errors = [
+        'firstNameError', 'lastNameError', 'registerEmailError', 
+        'phoneError', 'registerPasswordError', 'confirmPasswordError'
+      ];
+      errors.forEach(errorId => hideFieldError(errorId));
+    }
+    
+    function isValidEmail(email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email);
+    }
+    
+    function showSuccess(message) {
+      // You can implement a success notification here
+      alert(message);
+    }
+  </script>
+</body>
+</html>

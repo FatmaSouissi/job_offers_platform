@@ -1,0 +1,459 @@
+<!-- Profile Page Template -->
+<div class="floating-shapes">
+  <div class="shape"></div>
+  <div class="shape"></div>
+  <div class="shape"></div>
+</div>
+
+<div class="container mt-4">
+  <div class="row">
+    <!-- Sidebar -->
+    <div class="col-lg-3 col-md-4 mb-4">
+      <div class="card profile-sidebar">
+        <div class="card-body text-center">
+          <!-- Profile Picture -->
+          <!-- Profile Picture - Fixed version -->
+            <div class="profile-picture-container mb-3">
+            <div class="profile-picture">
+                <img 
+                [src]="getProfilePictureUrl()"
+                [alt]="currentUser?.firstName + ' ' + currentUser?.lastName"
+                class="img-fluid rounded-circle"
+                onerror="this.src='https://ui-avatars.com/api/?name=' + getInitials() + '&background=007bff&color=fff&size=150'"
+                >
+                <div class="profile-picture-overlay">
+                <i class="fas fa-camera"></i>
+                </div>
+            </div>
+            </div>
+          
+          <!-- User Info -->
+          <h5 class="card-title mb-1">
+            {{ currentUser?.firstName }} {{ currentUser?.lastName }}
+          </h5>
+          <p class="text-muted mb-2">{{ currentUser?.email }}</p>
+          <span class="badge" [class]="'badge-' + (currentUser?.userType === 'job_seeker' ? 'primary' : 'success')">
+            {{ getUserTypeDisplay() }}
+          </span>
+          
+          <!-- Account Status -->
+          <div class="mt-3">
+            <small class="text-muted">Statut du compte:</small><br>
+            <span [class]="getAccountStatusClass()">
+              <i class="fas fa-circle me-1" style="font-size: 8px;"></i>
+              {{ getAccountStatusDisplay() }}
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Navigation Menu -->
+      <div class="card mt-3">
+        <div class="list-group list-group-flush">
+          <a 
+            href="#" 
+            class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'profile'"
+            (click)="setActiveTab('profile'); $event.preventDefault()"
+          >
+            <i class="fas fa-user me-2"></i>
+            Mon Profil
+          </a>
+          <a 
+            href="#" 
+            class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'password'"
+            (click)="setActiveTab('password'); $event.preventDefault()"
+          >
+            <i class="fas fa-lock me-2"></i>
+            Mot de passe
+          </a>
+          <a 
+            href="#" 
+            class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'applications'"
+            *ngIf="currentUser?.userType === 'job_seeker'"
+            (click)="setActiveTab('applications'); $event.preventDefault()"
+          >
+            <i class="fas fa-file-alt me-2"></i>
+            Mes Candidatures
+          </a>
+          <a 
+            href="#" 
+            class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'saved-jobs'"
+            *ngIf="currentUser?.userType === 'job_seeker'"
+            (click)="setActiveTab('saved-jobs'); $event.preventDefault()"
+          >
+            <i class="fas fa-heart me-2"></i>
+            Emplois Sauvegardés
+          </a>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="col-lg-9 col-md-8">
+      
+      <!-- Profile Tab -->
+      <div class="card" *ngIf="activeTab === 'profile'">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-user me-2"></i>
+            Informations du Profil
+          </h5>
+        </div>
+        <div class="card-body">
+          
+          <!-- Success/Error Messages -->
+          <div *ngIf="profileMessage" class="alert alert-success" role="alert">
+            <i class="fas fa-check-circle me-2"></i>
+            {{ profileMessage }}
+          </div>
+          
+          <div *ngIf="profileError" class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            {{ profileError }}
+          </div>
+          
+          <form (ngSubmit)="onUpdateProfile()">
+            <div class="row">
+              <!-- First Name -->
+              <div class="col-md-6 mb-3">
+                <label for="firstName" class="form-label">
+                  <i class="fas fa-user me-1"></i>
+                  Prénom *
+                </label>
+                <input 
+                  type="text" 
+                  id="firstName"
+                  class="form-control"
+                  [class.is-invalid]="hasFieldError('firstName')"
+                  [(ngModel)]="profileData.firstName"
+                  name="firstName"
+                  required
+                  [disabled]="isUpdatingProfile"
+                  placeholder="Votre prénom"
+                >
+                <div *ngIf="hasFieldError('firstName')" class="invalid-feedback">
+                  {{ getFieldError('firstName') }}
+                </div>
+              </div>
+              
+              <!-- Last Name -->
+              <div class="col-md-6 mb-3">
+                <label for="lastName" class="form-label">
+                  <i class="fas fa-user me-1"></i>
+                  Nom *
+                </label>
+                <input 
+                  type="text" 
+                  id="lastName"
+                  class="form-control"
+                  [class.is-invalid]="hasFieldError('lastName')"
+                  [(ngModel)]="profileData.lastName"
+                  name="lastName"
+                  required
+                  [disabled]="isUpdatingProfile"
+                  placeholder="Votre nom"
+                >
+                <div *ngIf="hasFieldError('lastName')" class="invalid-feedback">
+                  {{ getFieldError('lastName') }}
+                </div>
+              </div>
+            </div>
+            
+            <div class="row">
+              <!-- Email (Read-only) -->
+              <div class="col-md-6 mb-3">
+                <label for="email" class="form-label">
+                  <i class="fas fa-envelope me-1"></i>
+                  Email
+                </label>
+                <input 
+                  type="email" 
+                  id="email"
+                  class="form-control"
+                  [value]="currentUser?.email"
+                  readonly
+                  disabled
+                >
+                <small class="form-text text-muted">
+                  L'email ne peut pas être modifié
+                </small>
+              </div>
+              
+              <!-- Phone -->
+              <div class="col-md-6 mb-3">
+                <label for="phone" class="form-label">
+                  <i class="fas fa-phone me-1"></i>
+                  Téléphone *
+                </label>
+                <input 
+                  type="tel" 
+                  id="phone"
+                  class="form-control"
+                  [class.is-invalid]="hasFieldError('phone')"
+                  [(ngModel)]="profileData.phone"
+                  name="phone"
+                  required
+                  [disabled]="isUpdatingProfile"
+                  placeholder="+216 XX XXX XXX"
+                >
+                <div *ngIf="hasFieldError('phone')" class="invalid-feedback">
+                  {{ getFieldError('phone') }}
+                </div>
+              </div>
+            </div>
+            
+            <!-- User Type (Read-only) -->
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="userType" class="form-label">
+                  <i class="fas fa-briefcase me-1"></i>
+                  Type de compte
+                </label>
+                <input 
+                  type="text" 
+                  id="userType"
+                  class="form-control"
+                  [value]="getUserTypeDisplay()"
+                  readonly
+                  disabled
+                >
+              </div>
+            </div>
+            
+            <!-- Account Details -->
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">
+                  <i class="fas fa-calendar me-1"></i>
+                  Membre depuis
+                </label>
+                <p class="form-control-plaintext">
+                  {{ formatDate(currentUser?.createdAt || '') }}
+                </p>
+              </div>
+              
+              <div class="col-md-6 mb-3">
+                <label class="form-label">
+                  <i class="fas fa-edit me-1"></i>
+                  Dernière modification
+                </label>
+                <p class="form-control-plaintext">
+                  {{ formatDate(currentUser?.updatedAt || '') }}
+                </p>
+              </div>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="row">
+              <div class="col-12">
+                <button 
+                  type="submit" 
+                  class="btn btn-primary"
+                  [disabled]="isUpdatingProfile"
+                >
+                  <span 
+                    *ngIf="isUpdatingProfile" 
+                    class="spinner-border spinner-border-sm me-2" 
+                  ></span>
+                  <i 
+                    *ngIf="!isUpdatingProfile" 
+                    class="fas fa-save me-2"
+                  ></i>
+                  {{ isUpdatingProfile ? 'Mise à jour...' : 'Mettre à jour le profil' }}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <!-- Password Tab -->
+      <div class="card" *ngIf="activeTab === 'password'">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-lock me-2"></i>
+            Changer le mot de passe
+          </h5>
+        </div>
+        <div class="card-body">
+          
+          <!-- Success/Error Messages -->
+          <div *ngIf="passwordMessage" class="alert alert-success" role="alert">
+            <i class="fas fa-check-circle me-2"></i>
+            {{ passwordMessage }}
+          </div>
+          
+          <div *ngIf="passwordError" class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            {{ passwordError }}
+          </div>
+          
+          <form (ngSubmit)="onChangePassword()">
+            <!-- Old Password -->
+            <div class="mb-3">
+              <label for="oldPassword" class="form-label">
+                <i class="fas fa-lock me-1"></i>
+                Mot de passe actuel *
+              </label>
+              <input 
+                type="password" 
+                id="oldPassword"
+                class="form-control"
+                [class.is-invalid]="hasFieldError('oldPassword')"
+                [(ngModel)]="passwordData.oldPassword"
+                name="oldPassword"
+                (input)="onOldPasswordChange()"
+                required
+                [disabled]="isChangingPassword"
+                placeholder="Votre mot de passe actuel"
+                autocomplete="current-password"
+              >
+              <div *ngIf="hasFieldError('oldPassword')" class="invalid-feedback">
+                <i class="fas fa-exclamation-circle me-1"></i>
+                {{ getFieldError('oldPassword') }}
+              </div>
+            </div>
+            
+            <div class="row">
+              <!-- New Password -->
+              <div class="col-md-6 mb-3">
+                <label for="newPassword" class="form-label">
+                  <i class="fas fa-key me-1"></i>
+                  Nouveau mot de passe *
+                </label>
+                <input 
+                  type="password" 
+                  id="newPassword"
+                  class="form-control"
+                  [class.is-invalid]="hasFieldError('newPassword')"
+                  [(ngModel)]="passwordData.newPassword"
+                  name="newPassword"
+                  (input)="onNewPasswordChange()"
+                  required
+                  minlength="6"
+                  [disabled]="isChangingPassword"
+                  placeholder="Nouveau mot de passe"
+                  autocomplete="new-password"
+                >
+                <div *ngIf="hasFieldError('newPassword')" class="invalid-feedback">
+                  <i class="fas fa-exclamation-circle me-1"></i>
+                  {{ getFieldError('newPassword') }}
+                </div>
+                <div class="form-text" *ngIf="passwordData.newPassword && passwordData.newPassword.length > 0">
+                  <small [class]="passwordData.newPassword.length >= 6 ? 'text-success' : 'text-danger'">
+                    <i [class]="passwordData.newPassword.length >= 6 ? 'fas fa-check' : 'fas fa-times'"></i>
+                    {{ passwordData.newPassword.length }}/6 caractères minimum
+                  </small>
+                </div>
+              </div>
+              
+              <!-- Confirm Password -->
+              <div class="col-md-6 mb-3">
+                <label for="confirmPassword" class="form-label">
+                  <i class="fas fa-key me-1"></i>
+                  Confirmer le mot de passe *
+                </label>
+                <input 
+                  type="password" 
+                  id="confirmPassword"
+                  class="form-control"
+                  [class.is-invalid]="hasFieldError('confirmPassword')"
+                  [class.is-valid]="passwordData.confirmPassword && passwordData.newPassword === passwordData.confirmPassword && !hasFieldError('confirmPassword')"
+                  [(ngModel)]="passwordData.confirmPassword"
+                  name="confirmPassword"
+                  (input)="onConfirmPasswordChange()"
+                  required
+                  [disabled]="isChangingPassword"
+                  placeholder="Confirmer le mot de passe"
+                  autocomplete="new-password"
+                >
+                <div *ngIf="hasFieldError('confirmPassword')" class="invalid-feedback">
+                  <i class="fas fa-exclamation-circle me-1"></i>
+                  {{ getFieldError('confirmPassword') }}
+                </div>
+                <div class="valid-feedback" *ngIf="passwordData.confirmPassword && passwordData.newPassword === passwordData.confirmPassword && !hasFieldError('confirmPassword')">
+                  <i class="fas fa-check me-1"></i>
+                  Les mots de passe correspondent
+                </div>
+              </div>
+            </div>
+            
+            <!-- Password Requirements -->
+            <div class="alert alert-info mb-3">
+              <h6><i class="fas fa-info-circle me-2"></i>Exigences du mot de passe:</h6>
+              <ul class="mb-0">
+                <li>Au moins 6 caractères</li>
+                <li>Combinaison de lettres et chiffres recommandée</li>
+                <li>Évitez les mots de passe faciles à deviner</li>
+              </ul>
+            </div>
+            
+            <!-- Submit Button -->
+            <button 
+              type="submit" 
+              class="btn btn-warning"
+              [disabled]="isChangingPassword || !isPasswordFormValid()"
+            >
+              <span 
+                *ngIf="isChangingPassword" 
+                class="spinner-border spinner-border-sm me-2" 
+              ></span>
+              <i 
+                *ngIf="!isChangingPassword" 
+                class="fas fa-key me-2"
+              ></i>
+              {{ isChangingPassword ? 'Modification en cours...' : 'Changer le mot de passe' }}
+            </button>
+          </form>
+        </div>
+      </div>
+      
+      <!-- Applications Tab -->
+      <div class="card" *ngIf="activeTab === 'applications' && currentUser?.userType === 'job_seeker'">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-file-alt me-2"></i>
+            Mes Candidatures
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="text-center py-5">
+            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+            <h5>Aucune candidature pour le moment</h5>
+            <p class="text-muted">Vos candidatures apparaîtront ici une fois que vous aurez postulé à des emplois.</p>
+            <a href="#" routerLink="/jobs" class="btn btn-primary">
+              <i class="fas fa-search me-2"></i>
+              Parcourir les emplois
+            </a>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Saved Jobs Tab -->
+      <div class="card" *ngIf="activeTab === 'saved-jobs' && currentUser?.userType === 'job_seeker'">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-heart me-2"></i>
+            Emplois Sauvegardés
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="text-center py-5">
+            <i class="fas fa-heart fa-3x text-muted mb-3"></i>
+            <h5>Aucun emploi sauvegardé</h5>
+            <p class="text-muted">Sauvegardez les emplois qui vous intéressent pour les retrouver facilement plus tard.</p>
+            <a href="#" routerLink="/jobs" class="btn btn-primary">
+              <i class="fas fa-search me-2"></i>
+              Parcourir les emplois
+            </a>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+</div>

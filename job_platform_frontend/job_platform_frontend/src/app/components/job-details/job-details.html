@@ -1,0 +1,179 @@
+<div class="container mt-4 page-transition">
+    <div class="mb-3">
+        <button class="btn btn-outline-secondary" (click)="goBack()">
+            <i class="fas fa-arrow-left"></i> Retour aux offres
+        </button>
+    </div>
+
+    <div class="job-details-card card" *ngIf="job">
+        <div class="card-header job-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="job-title mb-1">{{job.title || 'Titre non spécifié'}}</h2>
+                    <h5 class="company-name text-muted mb-2">
+                        {{getCompanyName()}}
+                    </h5>
+                    <div class="job-meta">
+                        
+                        <span class="badge badge-light job-type-badge me-2">
+                            <i class="fas fa-map-marker-alt"></i> {{job.location || 'Localisation non spécifiée'}}
+                        </span>
+                        <span class="badge badge-success job-type-badge me-2" *ngIf="job.isRemote">
+                            <i class="fas fa-home"></i> Télétravail
+                        </span>
+                        
+                    </div>
+                </div>
+                <div class="col-md-4 text-right">
+                    <div class="application-section">
+                        <button class="btn btn-success btn-lg apply-btn" 
+                                routerLink="/jobs/{{job.id}}/apply">
+                            <i class="fas fa-paper-plane"></i> 
+                            {{applying ? 'Candidature...' : 'Postuler'}}
+                        </button>
+                        <div class="alert alert-success" *ngIf="hasApplied">
+                            <i class="fas fa-check-circle"></i> Candidature envoyée
+                        </div>
+                        <div class="alert alert-info" *ngIf="applying">
+                            <i class="fas fa-spinner fa-spin"></i> Envoi de la candidature...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <section class="job-section">
+                        <h4 class="section-title">Description du poste</h4>
+                        <div class="section-content">
+                            <p>{{job.description || 'Aucune description disponible'}}</p>
+                        </div>
+                    </section>
+
+                    <section class="job-section" *ngIf="(job.responsibilities && job.responsibilities.trim().length > 0) || hasRequirements()">
+                        <h4 class="section-title">Responsabilités et Exigences</h4>
+                        <div class="section-content">
+                            <ng-container *ngIf="job.responsibilities && job.responsibilities.trim().length > 0">
+                                <h5>Responsabilités</h5>
+                                <ul class="responsibilities-list">
+                                    <li *ngFor="let responsibility of getResponsibilitiesArray()">
+                                        <i class="fas fa-tasks text-primary me-2"></i>{{responsibility}}
+                                    </li>
+                                </ul>
+                            </ng-container>
+
+                            <ng-container *ngIf="hasRequirements()">
+                                <h5 [class.mt-4]="job.responsibilities && job.responsibilities.trim().length > 0">Exigences</h5>
+                                <ul class="requirements-list">
+                                    <li *ngFor="let requirement of getRequirementsArray()">{{requirement}}</li>
+                                </ul>
+                            </ng-container>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="info-card card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Informations entreprise</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="company-info">
+                                <div class="info-item">
+                                    <strong>Nom:</strong>
+                                    <span>{{getCompanyName()}}</span>
+                                </div>
+                                <div class="info-item" *ngIf="getCompanyIndustry()">
+                                    <strong>Secteur:</strong>
+                                    <span>{{getCompanyIndustry()}}</span>
+                                </div>
+                                <div class="info-item" *ngIf="getCompanyWebsite()">
+                                    <strong>Site web:</strong>
+                                    <a [href]="getCompanyWebsite()" target="_blank" class="company-website">
+                                        {{getCompanyWebsite()}}
+                                    </a>
+                                </div>
+                                <div class="info-item" *ngIf="getCompanyDescription()">
+                                    <strong>Description:</strong>
+                                    <p class="company-description">{{getCompanyDescription()}}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="info-card card mt-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">Détails du poste</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="job-info">
+                                <div class="info-item">
+                                    <strong>Type:</strong>
+                                    <span>{{getJobTypeDisplay()}}</span>
+                                </div>
+                            
+                                <div class="info-item" *ngIf="job.salaryMin || job.salaryMax">
+                                    <strong>Salaire:</strong>
+                                    <span class="salary-range">
+                                        <ng-container *ngIf="job.salaryMin && job.salaryMax; else singleSalarySidebar">
+                                            {{job.salaryMin | number}} - {{job.salaryMax | number}} {{job.salaryCurrency || 'TND'}}
+                                        </ng-container>
+                                        <ng-template #singleSalarySidebar>
+                                            <ng-container *ngIf="job.salaryMin && !job.salaryMax">
+                                                À partir de {{job.salaryMin | number}} {{job.salaryCurrency || 'TND'}}
+                                            </ng-container>
+                                            <ng-container *ngIf="job.salaryMax && !job.salaryMin">
+                                                Jusqu'à {{job.salaryMax | number}} {{job.salaryCurrency || 'TND'}}
+                                            </ng-container>
+                                        </ng-template>
+                                    </span>
+                                </div>
+                                <div class="info-item" *ngIf="job.applicationDeadline">
+                                    <strong>Date limite:</strong>
+                                    <span class="deadline-date">{{formatDate(job.applicationDeadline)}}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center" *ngIf="!job && loading">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Chargement...</span>
+        </div>
+        <p class="mt-3">Chargement des détails...</p>
+    </div>
+
+    <div class="alert alert-danger" *ngIf="error">
+        <h4 class="alert-heading">Erreur</h4>
+        <p>{{error}}</p>
+        <button class="btn btn-primary" (click)="goBack()">Retour aux offres</button>
+    </div>
+
+    <div class="similar-jobs mt-5" *ngIf="similarJobs && similarJobs.length > 0">
+        <h4>Offres similaires</h4>
+        <div class="row">
+            <div class="col-md-6 mb-3" *ngFor="let similarJob of similarJobs.slice(0, 4)">
+                <div class="card job-card-small">
+                    <div class="card-body">
+                        <h6 class="card-title">{{similarJob.title}}</h6>
+                        <p class="text-muted small">{{getSimilarJobCompanyName(similarJob)}}</p>
+                        <div class="mb-2">
+                            <span class="badge badge-sm badge-primary">{{getSimilarJobTypeDisplay(similarJob)}}</span>
+                            <span class="badge badge-sm badge-light">{{similarJob.location || 'Non spécifiée'}}</span>
+                            <span class="badge badge-sm badge-success" *ngIf="similarJob.isRemote">Télétravail</span>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" (click)="viewSimilarJob(similarJob)">
+                            Voir détails
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
