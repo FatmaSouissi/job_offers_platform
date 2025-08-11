@@ -89,6 +89,7 @@ static async findAll() {
   }
 }
 */
+/*
 static async getCount() {
   console.log('=== SUPER SIMPLE getCount ===');
   
@@ -100,7 +101,7 @@ static async getCount() {
     console.error('Error in getCount:', error);
     throw error;
   }
-}
+}*/
 
 
   // Find job offer by ID
@@ -116,102 +117,36 @@ static async getCount() {
   }
 
 
-  // Get all job offers with filters and pagination
- static async findAll(filters = {}) {
-    const {
-      page = 1,
-      limit = 10,
-      searchTerm = null,
-      jobType = null,
-      experienceLevel = null,
-      categoryId = null,
-      location = null,
-      isRemote = null,
-      salaryMin = null,
-      salaryMax = null,
-      companyId = null,
-      isActive = true
-    } = filters;
-    
-    const offset = (page - 1) * limit;
-    let query = `
-      SELECT jo.*, c.company_name, c.logo, jc.category_name,
-             COUNT(a.id) as application_count
-      FROM job_offers jo
-      LEFT JOIN companies c ON jo.company_id = c.id
-      LEFT JOIN job_categories jc ON jo.category_id = jc.id
-      LEFT JOIN applications a ON jo.id = a.job_offer_id
-      WHERE 1=1
-    `;
-    const params = [];
-    
-    if (isActive !== null) {
-      query += ' AND jo.is_active = ?';
-      params.push(isActive);
-    }
-    
-    if (searchTerm) {
-      query += ' AND (jo.title LIKE ? OR jo.description LIKE ? OR c.company_name LIKE ?)';
-      params.push(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`);
-    }
-    
-    if (jobType) {
-      query += ' AND jo.job_type = ?';
-      params.push(jobType);
-    }
-    
-    if (experienceLevel) {
-      query += ' AND jo.experience_level = ?';
-      params.push(experienceLevel);
-    }
-    
-    if (categoryId) {
-      query += ' AND jo.category_id = ?';
-      params.push(categoryId);
-    }
-    
-    if (location) {
-      query += ' AND jo.location LIKE ?';
-      params.push(`%${location}%`);
-    }
-    
-    if (isRemote !== null) {
-      query += ' AND jo.is_remote = ?';
-      params.push(isRemote);
-    }
-    
-    if (salaryMin) {
-      query += ' AND jo.salary_max >= ?';
-      params.push(salaryMin);
-    }
-    
-    if (salaryMax) {
-      query += ' AND jo.salary_min <= ?';
-      params.push(salaryMax);
-    }
-    
-    if (companyId) {
-      query += ' AND jo.company_id = ?';
-      params.push(companyId);
-    }
-    
-    query += ' GROUP BY jo.id ORDER BY jo.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-    
-    try {
-      const [rows] = await db.execute(query, params);
-      return rows.map(row => ({
-        ...new JobOffer(row),
-        companyName: row.company_name,
-        companyLogo: row.logo,
-        categoryName: row.category_name,
-        applicationCount: row.application_count
-      }));
-    } catch (error) {
-      throw new Error('Error fetching job offers: ' + error.message);
-    }
-    
+ // Get all job offers without any filters or pagination
+static async findAll() {
+  console.log('=== Finding ALL job offers ===');
+
+  const query = `
+    SELECT jo.*, c.company_name, c.logo, jc.category_name,
+           COUNT(a.id) as application_count
+    FROM job_offers jo
+    LEFT JOIN companies c ON jo.company_id = c.id
+    LEFT JOIN job_categories jc ON jo.category_id = jc.id
+    LEFT JOIN applications a ON jo.id = a.job_offer_id
+    GROUP BY jo.id
+    ORDER BY jo.created_at DESC
+  `;
+
+  try {
+    const [rows] = await db.execute(query);
+    console.log('Found jobs:', rows.length);
+    return rows.map(row => ({
+      ...new JobOffer(row),
+      companyName: row.company_name,
+      companyLogo: row.logo,
+      categoryName: row.category_name,
+      applicationCount: row.application_count
+    }));
+  } catch (error) {
+    console.error('Error fetching all job offers:', error);
+    throw new Error('Error fetching all job offers: ' + error.message);
   }
+}
 
 
   // Get total count for pagination
@@ -226,7 +161,7 @@ static async getCount() {
       salaryMin = null,
       salaryMax = null,
       companyId = null,
-      isActive = true
+      isActive = 1 // Changed default value from true to 1
     } = filters;
     
     let query = `
