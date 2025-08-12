@@ -7,7 +7,7 @@ const corsOptions = {
     'http://127.0.0.1:4200',
     
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: [
     'Origin',
     'X-Requested-With',

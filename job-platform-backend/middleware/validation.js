@@ -1,6 +1,8 @@
 // middleware/validation.js
 const { body, validationResult } = require('express-validator');
 
+
+
 // Helper function to handle validation results
 const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
@@ -13,6 +15,14 @@ const handleValidationErrors = (req, res, next) => {
     }
     next();
 };
+
+
+const validateIsActive = [
+    body('isActive')
+        .isBoolean()
+        .withMessage('isActive must be a boolean value'),
+    handleValidationErrors
+];
 
 // Job Offer validation
 const validateJobOffer = [
@@ -384,5 +394,6 @@ module.exports = {
     validatePasswordReset,
     validateNewPassword,
     validatePasswordChange,
+    validateIsActive,
     handleValidationErrors
 };

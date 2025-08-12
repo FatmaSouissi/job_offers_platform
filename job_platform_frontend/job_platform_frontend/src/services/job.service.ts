@@ -183,6 +183,101 @@ export class JobService {
     );
   }
 
+
+ // Activate job offer 
+  activateJob(id: number): Observable<ApiResponse<JobOffer>> {
+    return this.http.patch<ApiResponse<JobOffer>>(`${this.API_URL}/jobs/${id}/activate`, {}, {
+      headers: this.authService.getAuthHeaders()
+    }).pipe(
+      catchError(error => {
+        console.error('Error activating job:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+  // Deactivate job offer
+  deactivateJob(id: number): Observable<ApiResponse<JobOffer>> {
+    return this.http.patch<ApiResponse<JobOffer>>(`${this.API_URL}/jobs/${id}/deactivate`, {}, {
+      headers: this.authService.getAuthHeaders()
+    }).pipe(
+      catchError(error => {
+        console.error('Error deactivating job:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+
+  // Update job status: method for activate/deactivate
+  updateJobStatus(id: number, isActive: boolean): Observable<ApiResponse<JobOffer>> {
+    return this.http.patch<ApiResponse<JobOffer>>(`${this.API_URL}/jobs/${id}/status`, 
+      { isActive }, 
+      {
+        headers: this.authService.getAuthHeaders()
+      }
+    ).pipe(
+      catchError(error => {
+        console.error('Error updating job status:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+ // Get job status
+  getJobStatus(id: number): Observable<ApiResponse<{id: number; title: string; isActive: boolean; updatedAt: string}>> {
+    return this.http.get<ApiResponse<{id: number; title: string; isActive: boolean; updatedAt: string}>>(`${this.API_URL}/jobs/${id}/status`)
+      .pipe(
+        catchError(error => {
+          console.error('Error fetching job status:', error);
+          return throwError(() => error);
+        })
+      );
+  }
+
+  // Get all active jobs for a company
+  getCompanyActiveJobs(companyId: number): Observable<ApiResponse<JobOffer[]>> {
+    return this.http.get<ApiResponse<JobOffer[]>>(`${this.API_URL}/jobs/company/${companyId}/active`, {
+      headers: this.authService.getAuthHeaders()
+    }).pipe(
+      catchError(error => {
+        console.error('Error fetching company active jobs:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+  // Get all inactive jobs for a company
+  getCompanyInactiveJobs(companyId: number): Observable<ApiResponse<JobOffer[]>> {
+    return this.http.get<ApiResponse<JobOffer[]>>(`${this.API_URL}/jobs/company/${companyId}/inactive`, {
+      headers: this.authService.getAuthHeaders()
+    }).pipe(
+      catchError(error => {
+        console.error('Error fetching company inactive jobs:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+  // Toggle job status (convenience method)
+  toggleJobStatus(job: JobOffer): Observable<ApiResponse<JobOffer>> {
+    return job.isActive ? this.deactivateJob(job.id) : this.activateJob(job.id);
+  }
+
+  // Bulk activate/deactivate jobs
+  bulkUpdateJobStatus(jobIds: number[], isActive: boolean): Observable<ApiResponse[]> {
+    const requests = jobIds.map(id => this.updateJobStatus(id, isActive));
+    // Using forkJoin would be better for parallel requests, but this is simpler
+    return new Observable(observer => {
+      Promise.all(requests.map(req => req.toPromise()))
+        .then(results => {
+          observer.next(results as ApiResponse[]);
+          observer.complete();
+        })
+        .catch(error => observer.error(error));
+    });
+  }
+
   // Delete job offer (company only)
   deleteJob(id: number): Observable<ApiResponse> {
     return this.http.delete<ApiResponse>(`${this.API_URL}/jobs/${id}`, {
@@ -194,6 +289,7 @@ export class JobService {
       })
     );
   }
+
 
   // Apply to job (job seeker only)
   applyToJob(jobId: number, applicationData?: any): Observable<ApiResponse> {

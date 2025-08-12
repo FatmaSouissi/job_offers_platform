@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const JobOffer = require('../models/JobOffer');
 const { auth, requireRole } = require('../middleware/auth');
-const { validateJobOffer } = require('../middleware/validation');
+const { validateJobOffer, validateIsActive } = require('../middleware/validation');
 const { Op, Sequelize } = require('sequelize');
 
 
@@ -132,7 +132,6 @@ router.get('/expired', auth, requireRole(['admin']), async (req, res) => {
 
 // @route   GET /api/jobs/:id
 //  Get job offer by ID
-
 router.get('/:id', async (req, res) => {
     try {
         const job = await JobOffer.findByIdWithDetails(req.params.id);
@@ -157,10 +156,8 @@ router.get('/:id', async (req, res) => {
 });
 
 
-
 // PUT /api/jobs/:id
 // Update a job offer
-// @access  Private (Company owner, Admin)
 router.put('/:id', auth, requireRole(['company', 'admin']), validateJobOffer, async (req, res) => {
     try {
         const job = await JobOffer.findById(req.params.id);
@@ -196,8 +193,238 @@ router.put('/:id', auth, requireRole(['company', 'admin']), validateJobOffer, as
 });
 
 
+// route   PATCH /api/jobs/:id/activate
+// Activate a job offer
+router.patch('/:id/activate', auth, requireRole(['company', 'admin']), async (req, res) => {
+    try {
+        const job = await JobOffer.findById(req.params.id);
+
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job offer not found'
+            });
+        }
+
+        // Only the company that owns the job or admin can activate
+        if (req.user.role === 'company' && job.companyId !== req.user.companyId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+
+        // Check if job is already active
+        if (job.isActive) {
+            return res.status(400).json({
+                success: false,
+                message: 'Job offer is already active'
+            });
+        }
+
+        const updatedJob = await JobOffer.updateStatusById(req.params.id, true);
+
+        res.json({
+            success: true,
+            data: updatedJob,
+            message: 'Job offer activated successfully'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+
+// route   PATCH /api/jobs/:id/deactivate
+// Deactivate a job offer
+router.patch('/:id/deactivate', auth, requireRole(['company', 'admin']), async (req, res) => {
+    try {
+        const job = await JobOffer.findById(req.params.id);
+
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job offer not found'
+            });
+        }
+
+        // Only the company that owns the job or admin can deactivate
+        if (req.user.role === 'company' && job.companyId !== req.user.companyId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+
+        // Check if job is already inactive
+        if (!job.isActive) {
+            return res.status(400).json({
+                success: false,
+                message: 'Job offer is already inactive'
+            });
+        }
+
+        const updatedJob = await JobOffer.updateStatusById(req.params.id, false);
+
+        res.json({
+            success: true,
+            data: updatedJob,
+            message: 'Job offer deactivated successfully'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+// route   PATCH /api/jobs/:id/status
+// Update job offer status (activate/deactivate)
+router.patch('/:id/status', auth, requireRole(['company', 'admin']), validateIsActive, async (req, res) => {
+    try {
+        const { isActive } = req.body;
+        const job = await JobOffer.findById(req.params.id);
+
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job offer not found'
+            });
+        }
+
+        // Only the company that owns the job or admin can update status
+        if (req.user.role === 'company' && job.companyId !== req.user.companyId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+
+        // Check if status is already the same
+        if (job.isActive === isActive) {
+            const status = isActive ? 'active' : 'inactive';
+            return res.status(400).json({
+                success: false,
+                message: `Job offer is already ${status}`
+            });
+        }
+
+        const updatedJob = await JobOffer.updateStatusById(req.params.id, isActive);
+
+        const action = isActive ? 'activated' : 'deactivated';
+        res.json({
+            success: true,
+            data: updatedJob,
+            message: `Job offer ${action} successfully`
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+// route   GET /api/jobs/:id/status
+// Get job offer status
+router.get('/:id/status', async (req, res) => {
+    try {
+        const job = await JobOffer.findById(req.params.id);
+        
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job offer not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                id: job.id,
+                title: job.title,
+                isActive: job.isActive,
+                updatedAt: job.updatedAt
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+// route   GET /api/jobs/company/:companyId/active
+// Get all active jobs for a company
+router.get('/company/:companyId/active', auth, requireRole(['company', 'admin']), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        // Only the company itself or admin can view their jobs
+        if (req.user.role === 'company' && req.user.companyId !== parseInt(companyId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+        
+        const jobs = await JobOffer.findAll({
+            companyId: parseInt(companyId),
+            isActive: true
+        });
+        
+        res.json({
+            success: true,
+            data: jobs,
+            count: jobs.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+// route   GET /api/jobs/company/:companyId/inactive
+// Get all inactive jobs for a company
+router.get('/company/:companyId/inactive', auth, requireRole(['company', 'admin']), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        // Only the company itself or admin can view their jobs
+        if (req.user.role === 'company' && req.user.companyId !== parseInt(companyId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+        
+        const jobs = await JobOffer.findAll({
+            companyId: parseInt(companyId),
+            isActive: false
+        });
+        
+        res.json({
+            success: true,
+            data: jobs,
+            count: jobs.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+
 // DELETE /api/jobs/:id
-// @access  Private (Company owner, Admin)
 router.delete('/:id', auth, requireRole(['company', 'admin']), async (req, res) => {
     try {
         const job = await JobOffer.findById(req.params.id);
@@ -232,9 +459,8 @@ router.delete('/:id', auth, requireRole(['company', 'admin']), async (req, res) 
 });
 
 
-// @route   GET /api/jobs/:id/applications
+// route   GET /api/jobs/:id/applications
 //  Get applications for a job offer
-// access  Private (Company owner, Admin)
 router.get('/:id/applications', auth, requireRole(['company', 'admin']), async (req, res) => {
     try {
         const { status } = req.query;

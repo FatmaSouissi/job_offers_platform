@@ -52,56 +52,6 @@ class JobOffer {
       throw new Error('Error creating job offer: ' + error.message);
     }
   }
-/*
-static async findAll() {
-  console.log('=== SUPER SIMPLE findAll ===');
-  
-  try {
-    // Just get the raw data from job_offers table
-    const query = 'SELECT * FROM job_offers ';
-    console.log('Executing query:', query);
-    
-    const [rows] = await db.execute(query);
-    console.log('Raw database result:', rows);
-    console.log('Number of rows:', rows.length);
-    
-    if (rows.length === 0) {
-      console.log('No rows found - table might be empty');
-      return [];
-    }
-    
-    // Don't use JobOffer constructor yet, just return raw data
-    const result = rows.map(row => ({
-      id: row.id,
-      title: row.title,
-      description: row.description,
-      companyId: row.company_id,
-      isActive: row.is_active,
-      createdAt: row.created_at
-    }));
-    
-    console.log('Processed result:', result);
-    return result;
-    
-  } catch (error) {
-    console.error('Error in super simple findAll:', error);
-    throw error;
-  }
-}
-*/
-/*
-static async getCount() {
-  console.log('=== SUPER SIMPLE getCount ===');
-  
-  try {
-    const [rows] = await db.execute('SELECT COUNT(*) as count FROM job_offers');
-    console.log('Count result:', rows[0].count);
-    return rows[0].count;
-  } catch (error) {
-    console.error('Error in getCount:', error);
-    throw error;
-  }
-}*/
 
 
   // Find job offer by ID
@@ -319,6 +269,19 @@ static async findAll() {
     }
   }
 
+  // Activate job offer
+  async activate() {
+    const query = 'UPDATE job_offers SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+    
+    try {
+      await db.execute(query, [this.id]);
+      this.isActive = true;
+      return true;
+    } catch (error) {
+      throw new Error('Error activating job offer: ' + error.message);
+    }
+  }
+
   // Deactivate job offer
   async deactivate() {
     const query = 'UPDATE job_offers SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
@@ -331,6 +294,34 @@ static async findAll() {
       throw new Error('Error deactivating job offer: ' + error.message);
     }
   }
+
+  // Update job status (generic method for both activate/deactivate)
+async updateStatus(isActive) {
+  const query = 'UPDATE job_offers SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+  
+  try {
+    await db.execute(query, [isActive, this.id]);
+    this.isActive = isActive;
+    return await JobOffer.findById(this.id);
+  } catch (error) {
+    throw new Error('Error updating job status: ' + error.message);
+  }
+}
+
+ //  update job status by ID
+static async updateStatusById(id, isActive) {
+  const query = 'UPDATE job_offers SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+  
+  try {
+    const [result] = await db.execute(query, [isActive, id]);
+    if (result.affectedRows === 0) {
+      throw new Error('Job offer not found');
+    }
+    return await JobOffer.findById(id);
+  } catch (error) {
+    throw new Error('Error updating job status: ' + error.message);
+  }
+}
 
   // Get job applications
   async getApplications(status = null) {

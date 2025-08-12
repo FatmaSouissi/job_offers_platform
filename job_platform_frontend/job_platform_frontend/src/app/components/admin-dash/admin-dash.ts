@@ -126,6 +126,9 @@ export class AdminDash implements OnInit {
   jobTypes = ['full-time', 'part-time', 'contract', 'internship'];
   companySizes = ['1-10', '11-50', '51-200', '201-500', '500+'];
   
+  // Job status management
+  updatingJobStatus: Set<number> = new Set();
+  
   // Pagination
   currentPage = 1;
   pageSize = 10;
@@ -167,7 +170,7 @@ export class AdminDash implements OnInit {
       
       // Load jobs
       const jobsResponse = await this.jobService.getJobs({ limit: 1000 }).toPromise();
-      const totalJobs = jobsResponse?.pagination?.total || 0;
+      const inactiveJobs = jobsResponse?.pagination?.total || 0;
       
       // Load active jobs
       const activeJobsResponse = await this.jobService.getJobs({ 
@@ -186,8 +189,8 @@ export class AdminDash implements OnInit {
           trend: { value: 12, isPositive: true }
         },
         {
-          title: 'Total Job Offers',
-          value: totalJobs,
+          title: 'Inactive Job Offers',
+          value: inactiveJobs,
           icon: 'briefcase',
           color: '#4CAF50',
           trend: { value: 8, isPositive: true }
@@ -428,21 +431,141 @@ export class AdminDash implements OnInit {
     }
   }
   
+  // Enhanced Job Status Management
+  async toggleJobStatus(job: JobOffer): Promise<void> {
+    if (this.updatingJobStatus.has(job.id)) {
+      return; // Prevent multiple simultaneous updates
+    }
+
+    this.updatingJobStatus.add(job.id);
+    const newStatus = !job.isActive;
+    
+    try {
+      const response = await this.jobService.updateJobStatus(job.id, newStatus).toPromise();
+      
+      if (response?.success) {
+        // Update local state
+        job.isActive = newStatus;
+        
+        // Show success notification
+        this.showNotification(
+          `Job "${job.title}" ${newStatus ? 'activated' : 'deactivated'} successfully`, 
+          'success'
+        );
+        
+        // Refresh dashboard cards to update active job count
+        this.loadDashboardCards();
+        
+        // If we're filtering by active status, refresh the jobs list
+        if (this.selectedJobType || this.searchTerm) {
+          this.loadJobs();
+        }
+      } else {
+        throw new Error(response?.message || 'Failed to update job status');
+      }
+    } catch (error) {
+      console.error('Error updating job status:', error);
+      this.showNotification(
+        `Error ${newStatus ? 'activating' : 'deactivating'} job "${job.title}"`, 
+        'error'
+      );
+      
+      // Revert the toggle if it was changed optimistically
+      // Note: We're not doing optimistic updates in this implementation
+    } finally {
+      this.updatingJobStatus.delete(job.id);
+    }
+  }
+
+  // Bulk job status operations
+  async activateSelectedJobs(): Promise<void> {
+    const selectedJobs = this.jobsSelection.selected.filter(job => !job.isActive);
+    if (selectedJobs.length === 0) {
+      this.showNotification('No inactive jobs selected', 'info');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to activate ${selectedJobs.length} job${selectedJobs.length > 1 ? 's' : ''}?`;
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      const results = await Promise.allSettled(
+        selectedJobs.map(job => this.jobService.activateJob(job.id).toPromise())
+      );
+
+      const successful = results.filter(result => result.status === 'fulfilled').length;
+      const failed = results.length - successful;
+
+      if (successful > 0) {
+        // Update local state for successful activations
+        selectedJobs.forEach(job => job.isActive = true);
+        this.showNotification(`${successful} job${successful > 1 ? 's' : ''} activated successfully`, 'success');
+      }
+
+      if (failed > 0) {
+        this.showNotification(`${failed} job${failed > 1 ? 's' : ''} failed to activate`, 'error');
+      }
+
+      this.jobsSelection.clear();
+      this.loadDashboardCards();
+    } catch (error) {
+      this.showNotification('Error activating selected jobs', 'error');
+    }
+  }
+
+  async deactivateSelectedJobs(): Promise<void> {
+    const selectedJobs = this.jobsSelection.selected.filter(job => job.isActive);
+    if (selectedJobs.length === 0) {
+      this.showNotification('No active jobs selected', 'info');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to deactivate ${selectedJobs.length} job${selectedJobs.length > 1 ? 's' : ''}?`;
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      const results = await Promise.allSettled(
+        selectedJobs.map(job => this.jobService.deactivateJob(job.id).toPromise())
+      );
+
+      const successful = results.filter(result => result.status === 'fulfilled').length;
+      const failed = results.length - successful;
+
+      if (successful > 0) {
+        // Update local state for successful deactivations
+        selectedJobs.forEach(job => job.isActive = false);
+        this.showNotification(`${successful} job${successful > 1 ? 's' : ''} deactivated successfully`, 'success');
+      }
+
+      if (failed > 0) {
+        this.showNotification(`${failed} job${failed > 1 ? 's' : ''} failed to deactivate`, 'error');
+      }
+
+      this.jobsSelection.clear();
+      this.loadDashboardCards();
+    } catch (error) {
+      this.showNotification('Error deactivating selected jobs', 'error');
+    }
+  }
+
+  // Check if job status is being updated
+  isJobStatusUpdating(jobId: number): boolean {
+    return this.updatingJobStatus.has(jobId);
+  }
+
+  // Get count of selected active/inactive jobs
+  getSelectedActiveJobsCount(): number {
+    return this.jobsSelection.selected.filter(job => job.isActive).length;
+  }
+
+  getSelectedInactiveJobsCount(): number {
+    return this.jobsSelection.selected.filter(job => !job.isActive).length;
+  }
+  
   // Job operations
   viewJobDetails(job: JobOffer): void {
     console.log('View job details:', job);
     this.showNotification(`View details for ${job.title} feature to be implemented`, 'info');
-  }
-  
-  async toggleJobStatus(job: JobOffer): Promise<void> {
-    try {
-      await this.jobService.updateJob(job.id, { isActive: !job.isActive }).toPromise();
-      this.showNotification('Job status updated successfully', 'success');
-      job.isActive = !job.isActive; // Update local state
-      this.loadDashboardCards(); // Refresh dashboard cards
-    } catch (error) {
-      this.showNotification('Error updating job status', 'error');
-    }
   }
   
   async deleteJob(job: JobOffer): Promise<void> {
