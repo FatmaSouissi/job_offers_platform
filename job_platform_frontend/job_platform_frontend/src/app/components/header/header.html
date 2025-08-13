@@ -77,33 +77,12 @@
                 <i class="fas fa-users me-2"></i>Gestion des utilisateurs
               </a>
             </li>
-            <li *ngIf="isAdmin()">
-              <a class="dropdown-item" 
-                 routerLink="/system-settings" 
-                 routerLinkActive="active">
-                <i class="fas fa-cog me-2"></i>Paramètres système
-              </a>
-            </li>
             
             <!-- Company-specific menu items -->
             <li *ngIf="isCompany()">
               <hr class="dropdown-divider">
             </li>
-            <li *ngIf="isCompany()">
-              <a class="dropdown-item" 
-                 routerLink="/my-jobs" 
-                 routerLinkActive="active">
-                <i class="fas fa-briefcase me-2"></i>Mes offres
-              </a>
-            </li>
-            <li *ngIf="isCompany()">
-              <a class="dropdown-item" 
-                 routerLink="/applications" 
-                 routerLinkActive="active">
-                <i class="fas fa-file-alt me-2"></i>Candidatures
-              </a>
-            </li>
-            
+
             <!-- Job Seeker specific menu items -->
             <li *ngIf="isJobSeeker()">
               <hr class="dropdown-divider">

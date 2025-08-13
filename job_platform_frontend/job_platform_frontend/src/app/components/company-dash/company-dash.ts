@@ -62,6 +62,8 @@ interface JobStatistics {
   expiredJobs: JobOffer[];
 }
 
+
+
 // Simple selection model for pure HTML/TypeScript
 class SelectionModel<T> {
   selected: T[] = [];
@@ -131,6 +133,29 @@ class TableDataSource<T> {
   providers: [DatePipe]
 })
 export class CompanyDash implements OnInit {
+  
+  // Add these properties to your component class
+analyticsData: {
+  totalJobs: number;
+  activeJobs: number;
+  inactiveJobs: number;
+  totalApplications: number;
+  pendingApplications: number;
+  reviewedApplications: number;
+  acceptedApplications: number;
+  rejectedApplications: number;
+} = {
+  totalJobs: 0,
+  activeJobs: 0,
+  inactiveJobs: 0,
+  totalApplications: 0,
+  pendingApplications: 0,
+  reviewedApplications: 0,
+  acceptedApplications: 0,
+  rejectedApplications: 0
+};
+
+  
   // User and company info
   currentUser: User | null = null;
   companyInfo: Company | null = null;
@@ -203,52 +228,54 @@ export class CompanyDash implements OnInit {
     private router: Router
   ) {}
 
-  async ngOnInit(): Promise<void> {
-    this.currentUser = this.authService.getCurrentUser();
+ async ngOnInit(): Promise<void> {
+  this.currentUser = this.authService.getCurrentUser();
+  
+  if (!this.currentUser || this.currentUser.userType !== 'company') {
+    this.router.navigate(['/login']);
+    return;
+  }
+
+  await this.loadDashboardData();
+ }
+
+ private async loadDashboardData(): Promise<void> {
+  this.loading = true;
+  try {
+    // Load company info first as it's needed for all other data
+    await this.loadCompanyInfo();
     
-    if (!this.currentUser || this.currentUser.userType !== 'company') {
-      this.router.navigate(['/login']);
+    // Verify we have company info before proceeding
+    if (!this.companyInfo?.id) {
+      this.showNotification('Unable to load company information. Please check your profile.', 'error');
       return;
     }
 
-    await this.loadDashboardData();
+    console.log('Loading dashboard data for company:', this.companyInfo.id);
+
+    // Load filter options first
+    await Promise.all([
+      this.loadJobCategories(),
+      this.loadAvailableLocations()
+    ]);
+
+    // Load all other data in parallel including analytics data
+    await Promise.all([
+      this.loadAnalyticsData(), // Add this line to load analytics data
+      this.loadEnhancedDashboardCards(),
+      this.loadJobs(),
+      this.loadApplications(),
+      this.loadRecentActivities(),
+      this.loadJobStatistics()
+    ]);
+  } catch (error) {
+    console.error('Error loading dashboard data:', error);
+    this.showNotification('Error loading dashboard data', 'error');
+  } finally {
+    this.loading = false;
+  }
   }
 
-  private async loadDashboardData(): Promise<void> {
-    this.loading = true;
-    try {
-      // Load company info first as it's needed for all other data
-      await this.loadCompanyInfo();
-      
-      // Verify we have company info before proceeding
-      if (!this.companyInfo?.id) {
-        this.showNotification('Unable to load company information. Please check your profile.', 'error');
-        return;
-      }
-
-      console.log('Loading dashboard data for company:', this.companyInfo.id);
-
-      // Load filter options first
-      await Promise.all([
-        this.loadJobCategories(),
-        this.loadAvailableLocations()
-      ]);
-
-      // Load all other data in parallel
-      await Promise.all([
-        this.loadEnhancedDashboardCards(),
-        this.loadJobs(),
-        this.loadApplications(),
-        this.loadRecentActivities(),
-        this.loadJobStatistics()
-      ]);
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      this.showNotification('Error loading dashboard data', 'error');
-    } finally {
-      this.loading = false;
-    }
-  }
 
   private async loadCompanyInfo(): Promise<void> {
     try {
@@ -291,126 +318,127 @@ export class CompanyDash implements OnInit {
 
   // Enhanced dashboard cards with comprehensive job statistics
   private async loadEnhancedDashboardCards(): Promise<void> {
+  try {
+    if (!this.companyInfo?.id) {
+      await this.loadCompanyInfo();
+    }
+
+    if (!this.companyInfo?.id) {
+      console.error('No company ID available for loading dashboard stats');
+      this.dashboardCards = this.getDefaultDashboardCards();
+      return;
+    }
+
+    //console.log(`Loading enhanced dashboard cards for company ID: ${this.companyInfo.id} (${this.companyInfo.name || 'Unknown Company'})`);
+    const companyId = parseInt(this.companyInfo.id);
+    
+    // Load statistics if analytics data isn't loaded yet
+    if (this.analyticsData.totalJobs === 0) {
+      await this.loadAnalyticsData();
+    }
+
+    // Try to get trend data from the API (optional enhancement)
+    let trendData: any = null;
     try {
-      if (!this.companyInfo?.id) {
-        await this.loadCompanyInfo();
-      }
-
-      if (!this.companyInfo?.id) {
-        console.error('No company ID available for loading dashboard stats');
-        this.dashboardCards = this.getDefaultDashboardCards();
-        return;
-      }
-
-      console.log('Loading enhanced dashboard cards for company ID:', this.companyInfo.id);
-      const companyId = parseInt(this.companyInfo.id);
-      
-      // Use the company job statistics API
       const statsResponse = await firstValueFrom(
         this.jobService.getCompanyJobStatistics(companyId)
-      ).catch(error => {
-        console.error('Error loading company statistics:', error);
-        return null;
-      });
-
-      // Also get active and inactive job counts
-      const [activeJobsResponse, inactiveJobsResponse] = await Promise.all([
-        firstValueFrom(this.jobService.getCompanyActiveJobs(companyId)).catch(() => null),
-        firstValueFrom(this.jobService.getCompanyInactiveJobs(companyId)).catch(() => null)
-      ]);
-
-      const activeJobsCount = activeJobsResponse?.data?.length || 0;
-      const inactiveJobsCount = inactiveJobsResponse?.data?.length || 0;
-      const totalJobsCount = activeJobsCount + inactiveJobsCount;
-
-      // Get application statistics
-      const applicationsResponse = await firstValueFrom(
-        this.applicationService.getApplicationsByCompany(companyId, 1, 1000)
-      ).catch(() => null);
-
-      let totalApplications = 0;
-      let pendingApplications = 0;
-      let acceptedApplications = 0;
-      
-      if (applicationsResponse?.data) {
-        totalApplications = applicationsResponse.data.length;
-        applicationsResponse.data.forEach((app: DetailedApplication) => {
-          if (app.status === 'pending') pendingApplications++;
-          if (app.status === 'accepted') acceptedApplications++;
-        });
-      }
-
-      this.dashboardCards = [
-        {
-          title: 'Total Job Offers',
-          value: totalJobsCount,
-          icon: 'briefcase',
-          color: '#667eea',
-          trend: statsResponse?.data?.jobsTrend ? {
-            value: Math.abs(statsResponse.data.jobsTrend),
-            isPositive: statsResponse.data.jobsTrend > 0
-          } : undefined
-        },
-        {
-          title: 'Active Jobs',
-          value: activeJobsCount,
-          icon: 'check-circle',
-          color: '#10b981',
-          trend: statsResponse?.data?.activeJobsTrend ? {
-            value: Math.abs(statsResponse.data.activeJobsTrend),
-            isPositive: statsResponse.data.activeJobsTrend > 0
-          } : undefined
-        },
-        {
-          title: 'Total Applications',
-          value: totalApplications,
-          icon: 'file-alt',
-          color: '#3b82f6',
-          trend: statsResponse?.data?.applicationsTrend ? {
-            value: Math.abs(statsResponse.data.applicationsTrend),
-            isPositive: statsResponse.data.applicationsTrend > 0
-          } : undefined
-        },
-        {
-          title: 'Pending Reviews',
-          value: pendingApplications,
-          icon: 'clock',
-          color: '#f59e0b',
-          trend: statsResponse?.data?.pendingTrend ? {
-            value: Math.abs(statsResponse.data.pendingTrend),
-            isPositive: statsResponse.data.pendingTrend < 0 // Decreasing pending is positive
-          } : undefined
-        },
-        {
-          title: 'Accepted Candidates',
-          value: acceptedApplications,
-          icon: 'user-check',
-          color: '#059669',
-          trend: statsResponse?.data?.acceptedTrend ? {
-            value: Math.abs(statsResponse.data.acceptedTrend),
-            isPositive: statsResponse.data.acceptedTrend > 0
-          } : undefined
-        },
-        {
-          title: 'Inactive Jobs',
-          value: inactiveJobsCount,
-          icon: 'pause-circle',
-          color: '#6b7280',
-          trend: statsResponse?.data?.inactiveJobsTrend ? {
-            value: Math.abs(statsResponse.data.inactiveJobsTrend),
-            isPositive: statsResponse.data.inactiveJobsTrend < 0 // Decreasing inactive is positive
-          } : undefined
-        }
-      ];
-
-      console.log('Enhanced dashboard cards created:', this.dashboardCards);
-
+      );
+      trendData = statsResponse?.data;
     } catch (error) {
-      console.error('Error loading enhanced dashboard cards:', error);
-      this.showNotification('Error loading dashboard statistics', 'error');
-      this.dashboardCards = this.getDefaultDashboardCards();
+      //console.log('Trend data not available:', error.message);
     }
+
+    // Use analytics data to create dashboard cards specifically for current company
+    this.dashboardCards = [
+      {
+        title: 'Total Job Offers',
+        value: this.analyticsData.totalJobs,
+        icon: 'briefcase',
+        color: '#667eea',
+        trend: trendData?.jobsTrend ? {
+          value: Math.abs(trendData.jobsTrend),
+          isPositive: trendData.jobsTrend > 0
+        } : undefined
+      },
+      {
+        title: 'Active Jobs',
+        value: this.analyticsData.activeJobs,
+        icon: 'check-circle',
+        color: '#10b981',
+        trend: trendData?.activeJobsTrend ? {
+          value: Math.abs(trendData.activeJobsTrend),
+          isPositive: trendData.activeJobsTrend > 0
+        } : undefined
+      },
+      {
+        title: 'Total Applications',
+        value: this.analyticsData.totalApplications,
+        icon: 'file-alt',
+        color: '#3b82f6',
+        trend: trendData?.applicationsTrend ? {
+          value: Math.abs(trendData.applicationsTrend),
+          isPositive: trendData.applicationsTrend > 0
+        } : undefined
+      },
+      {
+        title: 'Pending Reviews',
+        value: this.analyticsData.pendingApplications,
+        icon: 'clock',
+        color: '#f59e0b',
+        trend: trendData?.pendingTrend ? {
+          value: Math.abs(trendData.pendingTrend),
+          isPositive: trendData.pendingTrend < 0 // Decreasing pending is positive
+        } : undefined
+      },
+      {
+        title: 'Accepted Candidates',
+        value: this.analyticsData.acceptedApplications,
+        icon: 'user-check',
+        color: '#059669',
+        trend: trendData?.acceptedTrend ? {
+          value: Math.abs(trendData.acceptedTrend),
+          isPositive: trendData.acceptedTrend > 0
+        } : undefined
+      },
+      {
+        title: 'Inactive Jobs',
+        value: this.analyticsData.inactiveJobs,
+        icon: 'pause-circle',
+        color: '#6b7280',
+        trend: trendData?.inactiveJobsTrend ? {
+          value: Math.abs(trendData.inactiveJobsTrend),
+          isPositive: trendData.inactiveJobsTrend < 0 // Decreasing inactive is positive
+        } : undefined
+      }
+    ];
+
+    console.log(`Enhanced dashboard cards created for company "${this.companyInfo.companyName || companyId}":`, {
+      companyName: this.companyInfo.companyName,
+      companyId: companyId,
+      cardData: this.dashboardCards.map(card => ({ title: card.title, value: card.value }))
+    });
+
+  } catch (error) {
+    console.error('Error loading enhanced dashboard cards:', error);
+    this.showNotification('Error loading dashboard statistics', 'error');
+    this.dashboardCards = this.getDefaultDashboardCards();
   }
+}
+
+
+  // sync dashboard cards with analytics data
+private syncDashboardWithAnalytics(): void {
+  // Update dashboard cards to match analytics data
+  if (this.analyticsData && this.dashboardCards.length > 0) {
+    this.dashboardCards[0].value = this.analyticsData.totalJobs;
+    this.dashboardCards[1].value = this.analyticsData.activeJobs;
+    this.dashboardCards[2].value = this.analyticsData.totalApplications;
+    this.dashboardCards[3].value = this.analyticsData.pendingApplications;
+    this.dashboardCards[4].value = this.analyticsData.acceptedApplications;
+    this.dashboardCards[5].value = this.analyticsData.inactiveJobs;
+  }
+}
+
 
   private getDefaultDashboardCards(): DashboardCard[] {
     return [
@@ -1195,6 +1223,281 @@ export class CompanyDash implements OnInit {
       window.open(resumeFile, '_blank');
     }
   }
+
+ /* Load and calculate analytics data */
+ private async loadAnalyticsData(): Promise<void> {
+  try {
+    if (!this.companyInfo?.id) {
+      await this.loadCompanyInfo();
+    }
+
+    if (!this.companyInfo?.id) {
+      console.error('No company ID available for analytics');
+      return;
+    }
+
+    const companyId = parseInt(this.companyInfo.id);
+    console.log(`Loading analytics data for company ID: ${companyId} (${this.companyInfo.companyName || 'Unknown Company'})`);
+
+    // Load job statistics specifically for this company
+    const [activeJobsResponse, inactiveJobsResponse] = await Promise.all([
+      firstValueFrom(this.jobService.getCompanyActiveJobs(companyId)).catch(() => null),
+      firstValueFrom(this.jobService.getCompanyInactiveJobs(companyId)).catch(() => null)
+    ]);
+
+    const activeJobs = activeJobsResponse?.data || [];
+    const inactiveJobs = inactiveJobsResponse?.data || [];
+
+    // Filter jobs to ensure they belong to current company (double-check)
+    const currentCompanyActiveJobs = activeJobs.filter(job => job.companyId === companyId);
+    const currentCompanyInactiveJobs = inactiveJobs.filter(job => job.companyId === companyId);
+
+    // Load application statistics specifically for this company
+    const applicationsResponse = await firstValueFrom(
+      this.applicationService.getApplicationsByCompany(companyId, 1, 1000)
+    ).catch(() => null);
+
+    const applications = applicationsResponse?.data || [];
+
+    // Filter applications to ensure they're for jobs from current company
+    const currentCompanyApplications = applications.filter(app => 
+      app.job && app.job.companyId === companyId
+    );
+
+    // Calculate analytics data - this will match the dashboard cards
+    this.analyticsData = {
+      totalJobs: currentCompanyActiveJobs.length + currentCompanyInactiveJobs.length,
+      activeJobs: currentCompanyActiveJobs.length,
+      inactiveJobs: currentCompanyInactiveJobs.length,
+      totalApplications: currentCompanyApplications.length,
+      pendingApplications: currentCompanyApplications.filter(app => app.status === 'pending').length,
+      reviewedApplications: currentCompanyApplications.filter(app => app.status === 'reviewed').length,
+      acceptedApplications: currentCompanyApplications.filter(app => app.status === 'accepted').length,
+      rejectedApplications: currentCompanyApplications.filter(app => app.status === 'rejected').length
+    };
+
+    console.log(`Analytics data loaded for company "${this.companyInfo.companyName || companyId}":`, {
+      companyId,
+      totalJobs: this.analyticsData.totalJobs,
+      activeJobs: this.analyticsData.activeJobs,
+      inactiveJobs: this.analyticsData.inactiveJobs,
+      totalApplications: this.analyticsData.totalApplications,
+      breakdown: {
+        pending: this.analyticsData.pendingApplications,
+        reviewed: this.analyticsData.reviewedApplications,
+        accepted: this.analyticsData.acceptedApplications,
+        rejected: this.analyticsData.rejectedApplications
+      }
+    });
+
+  } catch (error) {
+    console.error('Error loading analytics data:', error);
+    // Set default values to prevent errors
+    this.analyticsData = {
+      totalJobs: 0,
+      activeJobs: 0,
+      inactiveJobs: 0,
+      totalApplications: 0,
+      pendingApplications: 0,
+      reviewedApplications: 0,
+      acceptedApplications: 0,
+      rejectedApplications: 0
+    };
+  }
+}
+
+
+
+  /* Get analytics statistic by key */
+  getAnalyticsStat(key: string): number {
+    return (this.analyticsData as any)[key] || 0;
+}
+
+  /*Get application percentage by status*/
+  getApplicationPercentage(status: string): number {
+    const total = this.analyticsData.totalApplications;
+    if (total === 0) return 0;
+
+    let count = 0;
+    switch (status) {
+      case 'pending':
+        count = this.analyticsData.pendingApplications;
+        break;
+      case 'reviewed':
+        count = this.analyticsData.reviewedApplications;
+        break;
+      case 'accepted':
+        count = this.analyticsData.acceptedApplications;
+        break;
+      case 'rejected':
+        count = this.analyticsData.rejectedApplications;
+        break;
+    }
+
+    return Math.round((count / total) * 100);
+  }
+
+  /* Get average applications per job */
+  getAverageApplicationsPerJob(): number {
+    if (this.analyticsData.totalJobs === 0) return 0;
+    return Math.round((this.analyticsData.totalApplications / this.analyticsData.totalJobs) * 10) / 10;
+}
+
+/**
+ * Get acceptance rate percentage
+ */
+getAcceptanceRate(): number {
+  if (this.analyticsData.totalApplications === 0) return 0;
+  return Math.round((this.analyticsData.acceptedApplications / this.analyticsData.totalApplications) * 100);
+}
+
+/* Get response rate (reviewed + accepted + rejected vs total)*/
+getResponseRate(): number {
+  if (this.analyticsData.totalApplications === 0) return 0;
+  const responded = this.analyticsData.reviewedApplications + 
+                   this.analyticsData.acceptedApplications + 
+                   this.analyticsData.rejectedApplications;
+  return Math.round((responded / this.analyticsData.totalApplications) * 100);
+}
+
+/* Get top performing jobs based on application count*/
+getTopPerformingJobs(): JobWithApplications[] {
+  return this.jobsDataSource.data
+    .sort((a, b) => (b.applicationCount || 0) - (a.applicationCount || 0))
+    .slice(0, 5);
+}
+
+/*Get job performance score (0-100) */
+getJobScore(job: JobWithApplications): number {
+  const maxApplications = Math.max(...this.jobsDataSource.data.map(j => j.applicationCount || 0));
+  if (maxApplications === 0) return 0;
+  return Math.round(((job.applicationCount || 0) / maxApplications) * 100);
+}
+
+/*Check if current month trend is positive */
+isCurrentMonthTrendPositive(): boolean {
+  // This would need actual trend data from your API
+  // For now, return true if we have recent applications
+  return this.recentActivities.length > 0;
+}
+
+/* Get current month applications count*/
+getCurrentMonthApplications(): number {
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  
+  return this.applicationsDataSource.data.filter(app => {
+    const appDate = new Date(app.appliedAt);
+    return appDate.getMonth() === currentMonth && appDate.getFullYear() === currentYear;
+  }).length;
+}
+
+/* Get last week applications count */
+getLastWeekApplications(): number {
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  
+  return this.applicationsDataSource.data.filter(app => {
+    const appDate = new Date(app.appliedAt);
+    return appDate >= oneWeekAgo;
+  }).length;
+}
+
+/* Get job success rate (accepted / total applications for that job) */
+getJobSuccessRate(job: JobWithApplications): number {
+  const total = job.applicationCount || 0;
+  if (total === 0) return 0;
+  const accepted = job.acceptedApplications || 0;
+  return Math.round((accepted / total) * 100);
+}
+
+/*Get days since job was created */
+getDaysActive(job: JobWithApplications): number {
+  const created = new Date(job.createdAt);
+  const today = new Date();
+  const diffTime = today.getTime() - created.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+async refreshAnalytics(): Promise<void> {
+  this.loading = true;
+  try {
+    await Promise.all([
+      this.loadAnalyticsData(),
+      this.loadJobs(),
+      this.loadApplications(),
+      this.loadEnhancedDashboardCards() // Refresh dashboard cards too
+    ]);
+    this.syncDashboardWithAnalytics(); // Ensure sync
+    this.showNotification('Analytics refreshed successfully', 'success');
+  } catch (error) {
+    console.error('Error refreshing analytics:', error);
+    this.showNotification('Error refreshing analytics', 'error');
+  } finally {
+    this.loading = false;
+  }
+}
+
+// Add method to refresh analytics when switching tabs
+selectTabs(index: number): void {
+  this.selectedTab = index;
+  
+  // If switching to analytics tab (index 2), ensure data is fresh
+  if (index === 2) {
+    this.loadAnalyticsData();
+  }
+}
+
+/* Export analytics report */
+exportAnalyticsReport(): void {
+  const reportData = {
+    generatedAt: new Date().toISOString(),
+    companyId: this.companyInfo?.id,
+    //companyName: this.companyInfo?.name,
+    analytics: this.analyticsData,
+    topJobs: this.getTopPerformingJobs().map(job => ({
+      title: job.title,
+      applications: job.applicationCount,
+      successRate: this.getJobSuccessRate(job),
+      daysActive: this.getDaysActive(job)
+    })),
+    performance: {
+      averageApplicationsPerJob: this.getAverageApplicationsPerJob(),
+      acceptanceRate: this.getAcceptanceRate(),
+      responseRate: this.getResponseRate()
+    }
+  };
+
+  const csvContent = this.generateAnalyticsCSV(reportData);
+  this.downloadCSV(csvContent, `analytics-report-${new Date().toISOString().split('T')[0]}.csv`);
+}
+
+/* Generate analytics CSV report */
+private generateAnalyticsCSV(reportData: any): string {
+  const headers = ['Metric', 'Value'];
+  const rows = [
+    ['Total Jobs', reportData.analytics.totalJobs],
+    ['Active Jobs', reportData.analytics.activeJobs],
+    ['Inactive Jobs', reportData.analytics.inactiveJobs],
+    ['Total Applications', reportData.analytics.totalApplications],
+    ['Pending Applications', reportData.analytics.pendingApplications],
+    ['Reviewed Applications', reportData.analytics.reviewedApplications],
+    ['Accepted Applications', reportData.analytics.acceptedApplications],
+    ['Rejected Applications', reportData.analytics.rejectedApplications],
+    ['Average Apps per Job', reportData.performance.averageApplicationsPerJob],
+    ['Acceptance Rate (%)', reportData.performance.acceptanceRate],
+    ['Response Rate (%)', reportData.performance.responseRate]
+  ];
+
+  return [headers, ...rows].map(row => 
+    row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(',')
+  ).join('\n');
+}
+
+
+  
+
+
 
   // Jobs pagination
   previousPage(): void {
