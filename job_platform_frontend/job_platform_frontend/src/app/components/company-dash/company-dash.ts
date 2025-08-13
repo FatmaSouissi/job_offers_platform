@@ -7,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 
 // Services
 import { AuthService } from '../../../services/auth.service';
-import { JobService, JobFilters } from '../../../services/job.service';
+import { JobService, JobFilters, JobOffersResponse } from '../../../services/job.service';
 import { ApplicationService, DetailedApplication } from '../../../services/application.service';
 import { CompanyService } from '../../../services/company.service';
 
@@ -15,6 +15,7 @@ import { CompanyService } from '../../../services/company.service';
 import { JobOffer } from '../../../interfaces/jobOffer';
 import { Company } from '../../../interfaces/company';
 import { User } from '../../../interfaces/user';
+import { ApiResponse } from '../../../interfaces/loginRequest';
 
 type ApplicationStatus = 'pending' | 'reviewed' | 'accepted' | 'rejected';
 
@@ -35,12 +36,30 @@ interface JobWithApplications extends JobOffer {
   reviewedApplications: number;
   acceptedApplications: number;
   rejectedApplications: number;
+  companyName?: string;
+  categoryName?: string;
 }
 
 interface RecentActivity {
   text: string;
   time: Date;
   icon: string;
+}
+
+// Enhanced Job Statistics Interface
+interface JobStatistics {
+  totalJobs: number;
+  activeJobs: number;
+  inactiveJobs: number;
+  totalApplications: number;
+  pendingApplications: number;
+  acceptedApplications: number;
+  rejectedApplications: number;
+  reviewedApplications: number;
+  avgApplicationsPerJob: number;
+  topPerformingJobs: JobOffer[];
+  recentJobs: JobOffer[];
+  expiredJobs: JobOffer[];
 }
 
 // Simple selection model for pure HTML/TypeScript
@@ -119,6 +138,9 @@ export class CompanyDash implements OnInit {
   // Dashboard cards data
   dashboardCards: DashboardCard[] = [];
   
+  // Enhanced job statistics
+  jobStatistics: JobStatistics | null = null;
+  
   // Jobs table
   jobsDataSource = new TableDataSource<JobWithApplications>();
   jobsSelection = new SelectionModel<JobWithApplications>(true, []);
@@ -132,11 +154,22 @@ export class CompanyDash implements OnInit {
   loading = false;
   showMenu = false;
   
-  // Job filters
+  // Enhanced filters and search
   searchTerm = '';
   selectedJobType = '';
   selectedJobStatus = '';
+  selectedExperienceLevel = '';
+  selectedLocation = '';
+  selectedCategory = '';
+  salaryMin: number | null = null;
+  salaryMax: number | null = null;
+  isRemoteFilter: boolean | null = null;
+  
+  // Available filter options (loaded from API)
   jobTypes = ['full-time', 'part-time', 'contract', 'internship'];
+  experienceLevels = ['entry', 'mid', 'senior', 'executive'];
+  jobCategories: any[] = [];
+  availableLocations: string[] = [];
   
   // Application filters
   applicationSearchTerm = '';
@@ -158,6 +191,10 @@ export class CompanyDash implements OnInit {
   // Recent activities
   recentActivities: RecentActivity[] = [];
 
+  // New properties for enhanced features
+  savedJobs: JobOffer[] = [];
+  similarJobs: { [jobId: number]: JobOffer[] } = {};
+  
   constructor(
     private authService: AuthService,
     private jobService: JobService,
@@ -189,14 +226,21 @@ export class CompanyDash implements OnInit {
         return;
       }
 
-      console.log('Loading dashboard data for company:', this.companyInfo.id); // Debug log
+      console.log('Loading dashboard data for company:', this.companyInfo.id);
+
+      // Load filter options first
+      await Promise.all([
+        this.loadJobCategories(),
+        this.loadAvailableLocations()
+      ]);
 
       // Load all other data in parallel
       await Promise.all([
-        this.loadDashboardCards(),
+        this.loadEnhancedDashboardCards(),
         this.loadJobs(),
         this.loadApplications(),
-        this.loadRecentActivities()
+        this.loadRecentActivities(),
+        this.loadJobStatistics()
       ]);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -211,7 +255,7 @@ export class CompanyDash implements OnInit {
       const response = await firstValueFrom(this.companyService.getMyCompany());
       if (response?.success && response.data) {
         this.companyInfo = response.data;
-        console.log('Company info loaded:', this.companyInfo); // Debug log
+        console.log('Company info loaded:', this.companyInfo);
       } else {
         console.error('Failed to load company info:', response);
       }
@@ -221,154 +265,189 @@ export class CompanyDash implements OnInit {
     }
   }
 
-  private async loadDashboardCards(): Promise<void> {
+  // Load job categories for filters
+  private async loadJobCategories(): Promise<void> {
     try {
-      // Ensure we have company info before loading stats
+      const response = await firstValueFrom(this.jobService.getJobCategories());
+      if (response?.success && response.data) {
+        this.jobCategories = response.data;
+      }
+    } catch (error) {
+      console.error('Error loading job categories:', error);
+    }
+  }
+
+  // Load available locations for filters
+  private async loadAvailableLocations(): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.jobService.getLocations());
+      if (response?.success && response.data) {
+        this.availableLocations = response.data;
+      }
+    } catch (error) {
+      console.error('Error loading locations:', error);
+    }
+  }
+
+  // Enhanced dashboard cards with comprehensive job statistics
+  private async loadEnhancedDashboardCards(): Promise<void> {
+    try {
       if (!this.companyInfo?.id) {
         await this.loadCompanyInfo();
       }
 
       if (!this.companyInfo?.id) {
         console.error('No company ID available for loading dashboard stats');
-        // Set default cards if no company info
-        this.dashboardCards = [
-          { title: 'Total Job Offers', value: 0, icon: 'briefcase', color: '#667eea' },
-          { title: 'Total Applications', value: 0, icon: 'file-alt', color: '#10b981' },
-          { title: 'Pending Reviews', value: 0, icon: 'clock', color: '#f59e0b' },
-          { title: 'Accepted Candidates', value: 0, icon: 'user-check', color: '#059669' }
-        ];
+        this.dashboardCards = this.getDefaultDashboardCards();
         return;
       }
 
-      console.log('Loading dashboard cards for company ID:', this.companyInfo.id); // Debug log
-
+      console.log('Loading enhanced dashboard cards for company ID:', this.companyInfo.id);
       const companyId = parseInt(this.companyInfo.id);
       
-      // Load real data in parallel
-      const [jobsResponse, applicationsResponse, statsResponse] = await Promise.all([
-        // Get total jobs count for this company
-        firstValueFrom(this.jobService.getJobs({ 
-          page: 1, 
-          limit: 1,
-          companyId: companyId
-        })).catch(error => {
-          console.error('Error loading jobs count:', error);
-          return null;
-        }),
-        
-        // Get applications for this company
-        firstValueFrom(this.applicationService.getApplicationsByCompany(companyId, 1, 1)).catch(error => {
-          console.error('Error loading applications:', error);
-          return null;
-        }),
-        
-        // Get application statistics for this company
-        firstValueFrom(this.applicationService.getApplicationStatistics(companyId)).catch(error => {
-          console.error('Error loading application statistics:', error);
-          return null;
-        })
+      // Use the company job statistics API
+      const statsResponse = await firstValueFrom(
+        this.jobService.getCompanyJobStatistics(companyId)
+      ).catch(error => {
+        console.error('Error loading company statistics:', error);
+        return null;
+      });
+
+      // Also get active and inactive job counts
+      const [activeJobsResponse, inactiveJobsResponse] = await Promise.all([
+        firstValueFrom(this.jobService.getCompanyActiveJobs(companyId)).catch(() => null),
+        firstValueFrom(this.jobService.getCompanyInactiveJobs(companyId)).catch(() => null)
       ]);
 
-      console.log('Dashboard data loaded:', { jobsResponse, applicationsResponse, statsResponse }); // Debug log
+      const activeJobsCount = activeJobsResponse?.data?.length || 0;
+      const inactiveJobsCount = inactiveJobsResponse?.data?.length || 0;
+      const totalJobsCount = activeJobsCount + inactiveJobsCount;
 
-      // Calculate real statistics
-      const totalJobs = jobsResponse?.pagination?.total || 0;
-      const totalApplications = applicationsResponse?.pagination?.total || applicationsResponse?.data?.length || 0;
-      
-      // Get applications by status
+      // Get application statistics
+      const applicationsResponse = await firstValueFrom(
+        this.applicationService.getApplicationsByCompany(companyId, 1, 1000)
+      ).catch(() => null);
+
+      let totalApplications = 0;
       let pendingApplications = 0;
       let acceptedApplications = 0;
-      let reviewedApplications = 0;
-      let rejectedApplications = 0;
-
+      
       if (applicationsResponse?.data) {
+        totalApplications = applicationsResponse.data.length;
         applicationsResponse.data.forEach((app: DetailedApplication) => {
-          switch (app.status) {
-            case 'pending':
-              pendingApplications++;
-              break;
-            case 'accepted':
-              acceptedApplications++;
-              break;
-            case 'reviewed':
-              reviewedApplications++;
-              break;
-            case 'rejected':
-              rejectedApplications++;
-              break;
-          }
+          if (app.status === 'pending') pendingApplications++;
+          if (app.status === 'accepted') acceptedApplications++;
         });
       }
 
-      // Use stats from API if available, otherwise use calculated values
-      const stats = statsResponse?.data || {};
-      
       this.dashboardCards = [
         {
           title: 'Total Job Offers',
-          value: totalJobs,
+          value: totalJobsCount,
           icon: 'briefcase',
           color: '#667eea',
-          trend: stats.jobsTrend ? {
-            value: Math.abs(stats.jobsTrend),
-            isPositive: stats.jobsTrend > 0
+          trend: statsResponse?.data?.jobsTrend ? {
+            value: Math.abs(statsResponse.data.jobsTrend),
+            isPositive: statsResponse.data.jobsTrend > 0
+          } : undefined
+        },
+        {
+          title: 'Active Jobs',
+          value: activeJobsCount,
+          icon: 'check-circle',
+          color: '#10b981',
+          trend: statsResponse?.data?.activeJobsTrend ? {
+            value: Math.abs(statsResponse.data.activeJobsTrend),
+            isPositive: statsResponse.data.activeJobsTrend > 0
           } : undefined
         },
         {
           title: 'Total Applications',
-          value: stats.totalApplications || totalApplications,
+          value: totalApplications,
           icon: 'file-alt',
-          color: '#10b981',
-          trend: stats.applicationsTrend ? {
-            value: Math.abs(stats.applicationsTrend),
-            isPositive: stats.applicationsTrend > 0
+          color: '#3b82f6',
+          trend: statsResponse?.data?.applicationsTrend ? {
+            value: Math.abs(statsResponse.data.applicationsTrend),
+            isPositive: statsResponse.data.applicationsTrend > 0
           } : undefined
         },
         {
           title: 'Pending Reviews',
-          value: stats.pendingApplications || pendingApplications,
+          value: pendingApplications,
           icon: 'clock',
           color: '#f59e0b',
-          trend: stats.pendingTrend ? {
-            value: Math.abs(stats.pendingTrend),
-            isPositive: stats.pendingTrend < 0 // Decreasing pending is positive
+          trend: statsResponse?.data?.pendingTrend ? {
+            value: Math.abs(statsResponse.data.pendingTrend),
+            isPositive: statsResponse.data.pendingTrend < 0 // Decreasing pending is positive
           } : undefined
         },
         {
           title: 'Accepted Candidates',
-          value: stats.acceptedApplications || acceptedApplications,
+          value: acceptedApplications,
           icon: 'user-check',
           color: '#059669',
-          trend: stats.acceptedTrend ? {
-            value: Math.abs(stats.acceptedTrend),
-            isPositive: stats.acceptedTrend > 0
+          trend: statsResponse?.data?.acceptedTrend ? {
+            value: Math.abs(statsResponse.data.acceptedTrend),
+            isPositive: statsResponse.data.acceptedTrend > 0
+          } : undefined
+        },
+        {
+          title: 'Inactive Jobs',
+          value: inactiveJobsCount,
+          icon: 'pause-circle',
+          color: '#6b7280',
+          trend: statsResponse?.data?.inactiveJobsTrend ? {
+            value: Math.abs(statsResponse.data.inactiveJobsTrend),
+            isPositive: statsResponse.data.inactiveJobsTrend < 0 // Decreasing inactive is positive
           } : undefined
         }
       ];
 
-      console.log('Dashboard cards created:', this.dashboardCards); // Debug log
+      console.log('Enhanced dashboard cards created:', this.dashboardCards);
 
     } catch (error) {
-      console.error('Error loading dashboard cards:', error);
+      console.error('Error loading enhanced dashboard cards:', error);
       this.showNotification('Error loading dashboard statistics', 'error');
-      // Set default cards on error
-      this.dashboardCards = [
-        { title: 'Total Job Offers', value: 0, icon: 'briefcase', color: '#667eea' },
-        { title: 'Total Applications', value: 0, icon: 'file-alt', color: '#10b981' },
-        { title: 'Pending Reviews', value: 0, icon: 'clock', color: '#f59e0b' },
-        { title: 'Accepted Candidates', value: 0, icon: 'user-check', color: '#059669' }
-      ];
+      this.dashboardCards = this.getDefaultDashboardCards();
     }
   }
 
+  private getDefaultDashboardCards(): DashboardCard[] {
+    return [
+      { title: 'Total Job Offers', value: 0, icon: 'briefcase', color: '#667eea' },
+      { title: 'Active Jobs', value: 0, icon: 'check-circle', color: '#10b981' },
+      { title: 'Total Applications', value: 0, icon: 'file-alt', color: '#3b82f6' },
+      { title: 'Pending Reviews', value: 0, icon: 'clock', color: '#f59e0b' },
+      { title: 'Accepted Candidates', value: 0, icon: 'user-check', color: '#059669' },
+      { title: 'Inactive Jobs', value: 0, icon: 'pause-circle', color: '#6b7280' }
+    ];
+  }
+
+  // Load comprehensive job statistics
+  private async loadJobStatistics(): Promise<void> {
+    try {
+      if (!this.companyInfo?.id) return;
+
+      const companyId = parseInt(this.companyInfo.id);
+      const response = await firstValueFrom(
+        this.jobService.getCompanyJobStatistics(companyId)
+      );
+
+      if (response?.success && response.data) {
+        this.jobStatistics = response.data;
+      }
+    } catch (error) {
+      console.error('Error loading job statistics:', error);
+    }
+  }
+
+  // Enhanced job loading with all available filters
   private async loadJobs(): Promise<void> {
     try {
-      // Ensure we have company info before loading jobs
       if (!this.companyInfo?.id) {
         await this.loadCompanyInfo();
       }
 
-      // If still no company info, show error and return
       if (!this.companyInfo?.id) {
         console.error('No company ID available for loading jobs');
         this.showNotification('Unable to load company information', 'error');
@@ -376,43 +455,60 @@ export class CompanyDash implements OnInit {
       }
 
       const companyId = parseInt(this.companyInfo.id);
-      console.log('Loading jobs for company ID:', companyId); // Debug log
+      console.log('Loading jobs for company ID:', companyId);
 
-      // Build filters - ALWAYS include companyId to filter by current company
+      // Build comprehensive filters
       const filters: JobFilters = {
         page: this.currentPage,
         limit: this.pageSize,
-        companyId: companyId // This is the key fix - always filter by company ID
+        companyId: companyId
       };
 
-      // Apply additional search and filters
+      // Apply all available filters
       if (this.searchTerm.trim()) filters.search = this.searchTerm.trim();
       if (this.selectedJobType) filters.jobType = this.selectedJobType;
+      if (this.selectedExperienceLevel) filters.experienceLevel = this.selectedExperienceLevel;
+      if (this.selectedLocation) filters.location = this.selectedLocation;
+      if (this.selectedCategory) filters.categoryId = parseInt(this.selectedCategory);
+      if (this.salaryMin) filters.salaryMin = this.salaryMin;
+      if (this.salaryMax) filters.salaryMax = this.salaryMax;
+      if (this.isRemoteFilter !== null) filters.isRemote = this.isRemoteFilter;
       if (this.selectedJobStatus !== '') {
         filters.isActive = this.selectedJobStatus === 'true';
       }
 
-      console.log('Loading jobs with filters:', filters); // Debug log
+      console.log('Loading jobs with filters:', filters);
 
       const response = await firstValueFrom(this.jobService.getJobs(filters));
-      console.log('Jobs response:', response); // Debug log
+      console.log('Jobs response:', response);
       
       if (response?.success && response.data) {
-        // Verify that loaded jobs belong to current company
         const filteredJobs = response.data.filter(job => job.companyId === companyId);
-        console.log(`Loaded ${response.data.length} jobs, filtered to ${filteredJobs.length} for company ${companyId}`); // Debug log
+        console.log(`Loaded ${response.data.length} jobs, filtered to ${filteredJobs.length} for company ${companyId}`);
         
-        // Map jobs to include application counts
+        // Enhanced job mapping with application counts and similar jobs
         const jobsWithApplications = await Promise.all(
           filteredJobs.map(async (job) => {
             try {
               // Get applications for this specific job
               const applicationsResponse = await firstValueFrom(
-                this.applicationService.getApplicationsByJob(job.id, 1, 999) // Get all applications for counting
+                this.applicationService.getApplicationsByJob(job.id, 1, 999)
               );
               
               const applications = applicationsResponse?.data || [];
               const applicationStats = this.calculateApplicationStats(applications);
+              
+              // Load similar jobs for each job (for enhanced recommendations)
+              try {
+                const similarJobsResponse = await firstValueFrom(
+                  this.jobService.getSimilarJobs(job.id, 3)
+                );
+                if (similarJobsResponse?.success && similarJobsResponse.data) {
+                  this.similarJobs[job.id] = similarJobsResponse.data;
+                }
+              } catch (error) {
+                console.error(`Error loading similar jobs for job ${job.id}:`, error);
+              }
               
               return {
                 ...job,
@@ -440,7 +536,7 @@ export class CompanyDash implements OnInit {
           totalJobs: this.totalJobs,
           currentPageJobs: jobsWithApplications.length,
           totalPages: this.totalPages
-        }); // Debug log
+        });
       } else {
         console.error('Failed to load jobs:', response);
         this.jobsDataSource.data = [];
@@ -456,6 +552,294 @@ export class CompanyDash implements OnInit {
     }
   }
 
+  // Enhanced job status management using specific API endpoints
+  async activateJob(job: JobWithApplications): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.jobService.activateJob(job.id));
+      if (response?.success) {
+        job.isActive = true;
+        this.showNotification('Job activated successfully', 'success');
+        await this.loadEnhancedDashboardCards();
+      }
+    } catch (error) {
+      console.error('Error activating job:', error);
+      this.showNotification('Error activating job', 'error');
+    }
+  }
+
+  async deactivateJob(job: JobWithApplications): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.jobService.deactivateJob(job.id));
+      if (response?.success) {
+        job.isActive = false;
+        this.showNotification('Job deactivated successfully', 'success');
+        await this.loadEnhancedDashboardCards();
+      }
+    } catch (error) {
+      console.error('Error deactivating job:', error);
+      this.showNotification('Error deactivating job', 'error');
+    }
+  }
+
+  // Use the specific status update API
+  async updateJobStatus(job: JobWithApplications, isActive: boolean): Promise<void> {
+    try {
+      const response = await firstValueFrom(
+        this.jobService.updateJobStatus(job.id, isActive)
+      );
+      
+      if (response?.success) {
+        job.isActive = isActive;
+        this.showNotification(
+          `Job ${isActive ? 'activated' : 'deactivated'} successfully`, 
+          'success'
+        );
+        await this.loadEnhancedDashboardCards();
+      }
+    } catch (error) {
+      console.error('Error updating job status:', error);
+      this.showNotification('Error updating job status', 'error');
+    }
+  }
+
+  // Get job status using specific API
+  async checkJobStatus(jobId: number): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.jobService.getJobStatus(jobId));
+      if (response?.success && response.data) {
+        console.log('Job status:', response.data);
+        this.showNotification(
+          `Job "${response.data.title}" is currently ${response.data.isActive ? 'active' : 'inactive'}`,
+          'info'
+        );
+      }
+    } catch (error) {
+      console.error('Error checking job status:', error);
+      this.showNotification('Error checking job status', 'error');
+    }
+  }
+
+  // Bulk operations using enhanced API methods
+  async bulkActivateJobs(): Promise<void> {
+    if (this.jobsSelection.selected.length === 0) return;
+
+    try {
+      const jobIds = this.jobsSelection.selected.map(job => job.id);
+      const response = await firstValueFrom(
+        this.jobService.bulkUpdateJobStatus(jobIds, true)
+      );
+      
+      if (response) {
+        this.showNotification('Jobs activated successfully', 'success');
+        this.jobsSelection.clear();
+        await Promise.all([this.loadJobs(), this.loadEnhancedDashboardCards()]);
+      }
+    } catch (error) {
+      console.error('Error bulk activating jobs:', error);
+      this.showNotification('Error activating jobs', 'error');
+    }
+  }
+
+  async bulkDeactivateJobs(): Promise<void> {
+    if (this.jobsSelection.selected.length === 0) return;
+
+    try {
+      const jobIds = this.jobsSelection.selected.map(job => job.id);
+      const response = await firstValueFrom(
+        this.jobService.bulkUpdateJobStatus(jobIds, false)
+      );
+      
+      if (response) {
+        this.showNotification('Jobs deactivated successfully', 'success');
+        this.jobsSelection.clear();
+        await Promise.all([this.loadJobs(), this.loadEnhancedDashboardCards()]);
+      }
+    } catch (error) {
+      console.error('Error bulk deactivating jobs:', error);
+      this.showNotification('Error deactivating jobs', 'error');
+    }
+  }
+
+  // Enhanced toggle using the toggle API method
+  async toggleJobStatus(job: JobWithApplications): Promise<void> {
+    try {
+      const response = await firstValueFrom(
+        this.jobService.toggleJobStatus(job)
+      );
+      
+      if (response?.success) {
+        job.isActive = !job.isActive;
+        this.showNotification(
+          `Job ${job.isActive ? 'activated' : 'deactivated'} successfully`, 
+          'success'
+        );
+        await this.loadEnhancedDashboardCards();
+      }
+    } catch (error) {
+      console.error('Error toggling job status:', error);
+      this.showNotification('Error updating job status', 'error');
+    }
+  }
+
+  // Load saved jobs for company users (if applicable)
+  async loadSavedJobs(): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.jobService.getSavedJobs());
+      if (response?.success && response.data) {
+        this.savedJobs = response.data;
+      }
+    } catch (error) {
+      console.error('Error loading saved jobs:', error);
+    }
+  }
+
+  // Search jobs using dedicated search API
+  async searchJobs(searchTerm: string): Promise<void> {
+    if (!searchTerm.trim()) {
+      this.clearJobFilters();
+      return;
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.jobService.searchJobs(searchTerm, 50)
+      );
+      
+      if (response?.success && response.data) {
+        // Filter results to show only jobs from current company
+        const companyJobs = response.data.filter(
+          job => job.companyId === parseInt(this.companyInfo?.id || '0')
+        );
+        
+        // Update the data source with search results
+        const jobsWithApplications = await Promise.all(
+          companyJobs.map(async (job) => {
+            const applicationsResponse = await firstValueFrom(
+              this.applicationService.getApplicationsByJob(job.id, 1, 999)
+            ).catch(() => null);
+            
+            const applications = applicationsResponse?.data || [];
+            const applicationStats = this.calculateApplicationStats(applications);
+            
+            return {
+              ...job,
+              ...applicationStats
+            } as JobWithApplications;
+          })
+        );
+
+        this.jobsDataSource.data = jobsWithApplications;
+        this.totalJobs = jobsWithApplications.length;
+        this.totalPages = 1; // Search results are not paginated
+        
+        this.showNotification(`Found ${jobsWithApplications.length} jobs matching "${searchTerm}"`, 'success');
+      }
+    } catch (error) {
+      console.error('Error searching jobs:', error);
+      this.showNotification('Error searching jobs', 'error');
+    }
+  }
+
+  // Get similar jobs for recommendations
+  getSimilarJobs(job: JobWithApplications): JobOffer[] {
+    return this.similarJobs[job.id] || [];
+  }
+
+  // View similar jobs
+  viewSimilarJobs(job: JobWithApplications): void {
+    const similarJobs = this.getSimilarJobs(job);
+    if (similarJobs.length > 0) {
+      console.log(`Similar jobs for "${job.title}":`, similarJobs);
+      // You could show these in a modal or navigate to a detailed view
+      this.showNotification(`Found ${similarJobs.length} similar jobs`, 'info');
+    } else {
+      this.showNotification('No similar jobs found', 'info');
+    }
+  }
+
+  // Check if user has applied to job (for display purposes)
+  async hasUserApplied(jobId: number): Promise<boolean> {
+    try {
+      const response = await firstValueFrom(
+        this.jobService.hasUserApplied(jobId)
+      );
+      return response?.success && response.data?.hasApplied || false;
+    } catch (error) {
+      console.error('Error checking application status:', error);
+      return false;
+    }
+  }
+
+  // Get job statistics for display
+  async viewJobStatistics(): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.jobService.getJobStatistics());
+      if (response?.success && response.data) {
+        console.log('Global Job Statistics:', response.data);
+        // You could display this data in a modal or separate view
+        this.showNotification('Job statistics loaded successfully', 'success');
+      }
+    } catch (error) {
+      console.error('Error loading job statistics:', error);
+      this.showNotification('Error loading job statistics', 'error');
+    }
+  }
+
+  // Enhanced filter applications
+  applyJobFilters(): void {
+    this.currentPage = 1;
+    this.loadJobs();
+  }
+
+  // Enhanced clear filters
+  clearJobFilters(): void {
+    this.searchTerm = '';
+    this.selectedJobType = '';
+    this.selectedJobStatus = '';
+    this.selectedExperienceLevel = '';
+    this.selectedLocation = '';
+    this.selectedCategory = '';
+    this.salaryMin = null;
+    this.salaryMax = null;
+    this.isRemoteFilter = null;
+    this.currentPage = 1;
+    this.loadJobs();
+  }
+
+  filterByJobType(jobType: string): void {
+    this.selectedJobType = jobType;
+    this.applyJobFilters();
+  }
+
+  filterByExperience(level: string): void {
+    this.selectedExperienceLevel = level;
+    this.applyJobFilters();
+  }
+
+  filterByLocation(location: string): void {
+    this.selectedLocation = location;
+    this.applyJobFilters();
+  }
+
+  filterBySalaryRange(min: number | null, max: number | null): void {
+    this.salaryMin = min;
+    this.salaryMax = max;
+    this.applyJobFilters();
+  }
+
+  // Toggle remote filter
+  toggleRemoteFilter(): void {
+    if (this.isRemoteFilter === null) {
+      this.isRemoteFilter = true;
+    } else if (this.isRemoteFilter === true) {
+      this.isRemoteFilter = false;
+    } else {
+      this.isRemoteFilter = null;
+    }
+    this.applyJobFilters();
+  }
+
+  // Rest of the existing methods remain the same...
   private calculateApplicationStats(applications: DetailedApplication[]) {
     const stats = {
       applicationCount: applications.length,
@@ -487,12 +871,10 @@ export class CompanyDash implements OnInit {
 
   private async loadApplications(): Promise<void> {
     try {
-      // Ensure we have company info before loading applications
       if (!this.companyInfo?.id) {
         await this.loadCompanyInfo();
       }
 
-      // If still no company info, show error and return
       if (!this.companyInfo?.id) {
         console.error('No company ID available for loading applications');
         this.showNotification('Unable to load company information', 'error');
@@ -500,9 +882,8 @@ export class CompanyDash implements OnInit {
       }
 
       const companyId = parseInt(this.companyInfo.id);
-      console.log('Loading applications for company ID:', companyId); // Debug log
+      console.log('Loading applications for company ID:', companyId);
 
-      // Use getApplicationsByCompany to ensure we only get this company's applications
       let response;
       
       if (this.selectedJobFilter) {
@@ -526,7 +907,7 @@ export class CompanyDash implements OnInit {
         );
       }
 
-      console.log('Applications response:', response); // Debug log
+      console.log('Applications response:', response);
       
       if (response?.success && response.data) {
         let applications = response.data;
@@ -555,7 +936,7 @@ export class CompanyDash implements OnInit {
           totalApplications: this.totalApplications,
           currentPageApplications: applications.length,
           totalPages: this.totalApplicationPages
-        }); // Debug log
+        });
       } else {
         console.error('Failed to load applications:', response);
         this.applicationsDataSource.data = [];
@@ -573,7 +954,6 @@ export class CompanyDash implements OnInit {
 
   private async loadRecentActivities(): Promise<void> {
     try {
-      // Ensure we have company info
       if (!this.companyInfo?.id) {
         await this.loadCompanyInfo();
       }
@@ -591,7 +971,7 @@ export class CompanyDash implements OnInit {
         this.applicationService.getRecentApplications(10, parseInt(this.companyInfo.id))
       );
       
-      console.log('Recent activities response:', response); // Debug log
+      console.log('Recent activities response:', response);
       
       if (response?.success && response.data && response.data.length > 0) {
         this.recentActivities = response.data.map(app => ({
@@ -661,7 +1041,7 @@ export class CompanyDash implements OnInit {
       const response = await firstValueFrom(this.jobService.deleteJob(job.id));
       if (response?.success) {
         this.showNotification('Job deleted successfully', 'success');
-        await Promise.all([this.loadJobs(), this.loadDashboardCards()]); // Refresh both jobs and cards
+        await Promise.all([this.loadJobs(), this.loadEnhancedDashboardCards()]);
       }
     } catch (error) {
       console.error('Error deleting job:', error);
@@ -669,44 +1049,10 @@ export class CompanyDash implements OnInit {
     }
   }
 
-  async toggleJobStatus(job: JobWithApplications): Promise<void> {
-    try {
-      const response = await firstValueFrom(
-        this.jobService.updateJob(job.id, { isActive: !job.isActive })
-      );
-      
-      if (response?.success) {
-        job.isActive = !job.isActive;
-        this.showNotification(
-          `Job ${job.isActive ? 'activated' : 'deactivated'} successfully`, 
-          'success'
-        );
-        await this.loadDashboardCards(); // Refresh dashboard cards
-      }
-    } catch (error) {
-      console.error('Error updating job status:', error);
-      this.showNotification('Error updating job status', 'error');
-    }
-  }
-
   viewApplications(job: JobWithApplications): void {
     this.selectedJobFilter = job.id.toString();
     this.selectTab(1);
     this.applyApplicationFilters();
-  }
-
-  // Job filters
-  applyJobFilters(): void {
-    this.currentPage = 1;
-    this.loadJobs();
-  }
-
-  clearJobFilters(): void {
-    this.searchTerm = '';
-    this.selectedJobType = '';
-    this.selectedJobStatus = '';
-    this.currentPage = 1;
-    this.loadJobs();
   }
 
   // Application filters
@@ -751,25 +1097,7 @@ export class CompanyDash implements OnInit {
            this.applicationsDataSource.data.every(app => this.applicationsSelection.isSelected(app));
   }
 
-  // Bulk actions
-  async bulkToggleStatus(): Promise<void> {
-    if (this.jobsSelection.selected.length === 0) return;
-
-    try {
-      const promises = this.jobsSelection.selected.map(job => 
-        firstValueFrom(this.jobService.updateJob(job.id, { isActive: !job.isActive }))
-      );
-      
-      await Promise.all(promises);
-      this.showNotification('Job statuses updated successfully', 'success');
-      this.jobsSelection.clear();
-      await Promise.all([this.loadJobs(), this.loadDashboardCards()]); // Refresh both
-    } catch (error) {
-      console.error('Error updating job statuses:', error);
-      this.showNotification('Error updating job statuses', 'error');
-    }
-  }
-
+  // Enhanced bulk actions
   async deleteSelectedJobs(): Promise<void> {
     if (this.jobsSelection.selected.length === 0) return;
     
@@ -785,7 +1113,7 @@ export class CompanyDash implements OnInit {
       await Promise.all(promises);
       this.showNotification('Jobs deleted successfully', 'success');
       this.jobsSelection.clear();
-      await Promise.all([this.loadJobs(), this.loadDashboardCards()]); // Refresh both
+      await Promise.all([this.loadJobs(), this.loadEnhancedDashboardCards()]);
     } catch (error) {
       console.error('Error deleting jobs:', error);
       this.showNotification('Error deleting jobs', 'error');
@@ -804,7 +1132,7 @@ export class CompanyDash implements OnInit {
       if (response?.success) {
         this.showNotification(`Applications updated to ${status}`, 'success');
         this.applicationsSelection.clear();
-        await Promise.all([this.loadApplications(), this.loadDashboardCards()]); // Refresh both
+        await Promise.all([this.loadApplications(), this.loadEnhancedDashboardCards()]);
       }
     } catch (error) {
       console.error('Error updating application statuses:', error);
@@ -825,12 +1153,11 @@ export class CompanyDash implements OnInit {
       if (response?.success) {
         application.status = newStatus;
         this.showNotification('Application status updated', 'success');
-        await this.loadDashboardCards(); // Refresh dashboard cards
+        await this.loadEnhancedDashboardCards();
       }
     } catch (error) {
       console.error('Error updating application status:', error);
       this.showNotification('Error updating application status', 'error');
-      // Revert the select value
       target.value = application.status;
     }
   }
@@ -855,7 +1182,7 @@ export class CompanyDash implements OnInit {
       
       if (response?.success) {
         this.showNotification('Application deleted successfully', 'success');
-        await Promise.all([this.loadApplications(), this.loadDashboardCards()]); // Refresh both
+        await Promise.all([this.loadApplications(), this.loadEnhancedDashboardCards()]);
       }
     } catch (error) {
       console.error('Error deleting application:', error);
@@ -961,11 +1288,13 @@ export class CompanyDash implements OnInit {
   }
 
   private generateJobsCSV(): string {
-    const headers = ['Title', 'Type', 'Location', 'Salary Range', 'Applications', 'Status', 'Posted Date'];
+    const headers = ['Title', 'Type', 'Experience Level', 'Location', 'Remote', 'Salary Range', 'Applications', 'Status', 'Posted Date'];
     const rows = this.jobsDataSource.data.map(job => [
       job.title,
       this.formatJobType(job.jobType || ''),
+      this.formatExperienceLevel(job.experienceLevel || ''),
       job.location,
+      job.isRemote ? 'Yes' : 'No',
       this.formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency),
       job.applicationCount.toString(),
       job.isActive ? 'Active' : 'Inactive',
@@ -978,14 +1307,15 @@ export class CompanyDash implements OnInit {
   }
 
   private generateApplicationsCSV(): string {
-    const headers = ['Applicant Name', 'Email', 'Phone', 'Job Title', 'Status', 'Applied Date'];
+    const headers = ['Applicant Name', 'Email', 'Phone', 'Job Title', 'Status', 'Applied Date', 'Experience Years'];
     const rows = this.applicationsDataSource.data.map(app => [
       `${app.firstName} ${app.lastName}`,
       app.email,
       app.phone || '',
       app.job?.title || '',
       app.status,
-      new Date(app.appliedAt).toLocaleDateString()
+      new Date(app.appliedAt).toLocaleDateString(),
+      //app.experienceYears?.toString() || ''
     ]);
 
     return [headers, ...rows].map(row => 
@@ -1009,7 +1339,7 @@ export class CompanyDash implements OnInit {
     this.router.navigate(['/company/profile']);
   }
 
-  // Utility methods
+  // Utility methods with enhanced functionality
   formatJobType(jobType: string): string {
     return this.jobService.formatJobType(jobType);
   }
@@ -1022,30 +1352,174 @@ export class CompanyDash implements OnInit {
     return this.jobService.formatSalary(min, max, currency);
   }
 
-  private showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
-    // Simple notification - you can replace with a proper notification service
+  // Check if job is expired
+  isJobExpired(deadline?: string): boolean {
+    return this.jobService.isJobExpired(deadline);
+  }
+
+  // Get days until deadline
+  getDaysUntilDeadline(deadline?: string): number | null {
+    return this.jobService.getDaysUntilDeadline(deadline);
+  }
+
+  // Format days until deadline for display
+  formatDeadline(deadline?: string): string {
+    if (!deadline) return 'No deadline';
+    
+    const days = this.getDaysUntilDeadline(deadline);
+    if (days === null) return 'No deadline';
+    if (days < 0) return 'Expired';
+    if (days === 0) return 'Today';
+    if (days === 1) return '1 day left';
+    return `${days} days left`;
+  }
+
+  // Get deadline status class for styling
+  getDeadlineClass(deadline?: string): string {
+    if (!deadline) return '';
+    
+    const days = this.getDaysUntilDeadline(deadline);
+    if (days === null) return '';
+    if (days < 0) return 'expired';
+    if (days <= 3) return 'urgent';
+    if (days <= 7) return 'warning';
+    return 'normal';
+  }
+
+  // Advanced search functionality
+  async performAdvancedSearch(): Promise<void> {
+    if (!this.searchTerm.trim() && !this.selectedJobType && !this.selectedExperienceLevel && 
+        !this.selectedLocation && !this.selectedCategory && !this.salaryMin && !this.salaryMax) {
+      this.showNotification('Please enter search criteria', 'info');
+      return;
+    }
+
+    this.applyJobFilters();
+  }
+
+  // Reset all filters and search
+  resetAllFilters(): void {
+    this.clearJobFilters();
+    this.clearApplicationFilters();
+  }
+
+  // Show job performance analytics
+  showJobAnalytics(job: JobWithApplications): void {
+    const analytics = {
+      job: job.title,
+      applicationRate: job.applicationCount,
+      conversionRate: job.applicationCount > 0 ? (job.acceptedApplications / job.applicationCount * 100).toFixed(1) + '%' : '0%',
+      averageTimeToHire: 'N/A', // Could be calculated from application dates
+      topSources: 'Direct Application', // Could be enhanced with actual data
+      skillsMatch: 'High' // Could be calculated based on requirements vs applicant skills
+    };
+
+    console.log('Job Analytics:', analytics);
+    this.showNotification(`Analytics for "${job.title}" - ${job.applicationCount} applications, ${analytics.conversionRate} conversion rate`, 'info');
+  }
+
+  // Show company performance dashboard
+  showCompanyDashboard(): void {
+    if (this.jobStatistics) {
+      const summary = `Company Performance:
+        Total Jobs: ${this.jobStatistics.totalJobs}
+        Active Jobs: ${this.jobStatistics.activeJobs}
+        Total Applications: ${this.jobStatistics.totalApplications}
+        Avg Applications per Job: ${this.jobStatistics.avgApplicationsPerJob}`;
+      
+      console.log('Company Dashboard:', this.jobStatistics);
+      this.showNotification('Company performance data logged to console', 'info');
+    }
+  }
+
+  // Enhanced notification system
+  private showNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info'): void {
     console.log(`${type.toUpperCase()}: ${message}`);
     
-    // You can implement a toast notification here
+    // Enhanced notification with better styling and animation
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
-    notification.textContent = message;
+    notification.innerHTML = `
+      <div class="notification-content">
+        <i class="fas fa-${this.getNotificationIcon(type)}"></i>
+        <span>${message}</span>
+        <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+      </div>
+    `;
+    
     notification.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      padding: 12px 24px;
+      min-width: 300px;
+      max-width: 500px;
+      padding: 16px;
       border-radius: 8px;
       color: white;
-      background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+      background: ${this.getNotificationColor(type)};
       z-index: 10000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       animation: slideInRight 0.3s ease-out;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
+    
+    // Add CSS for animation if not exists
+    if (!document.getElementById('notification-styles')) {
+      const style = document.createElement('style');
+      style.id = 'notification-styles';
+      style.textContent = `
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        .notification-content {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .notification-close {
+          background: none;
+          border: none;
+          color: white;
+          font-size: 18px;
+          cursor: pointer;
+          margin-left: auto;
+          padding: 0;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      `;
+      document.head.appendChild(style);
+    }
     
     document.body.appendChild(notification);
     
+    // Auto remove after 5 seconds
     setTimeout(() => {
-      notification.remove();
-    }, 3000);
+      if (notification.parentElement) {
+        notification.remove();
+      }
+    }, 5000);
+  }
+
+  private getNotificationIcon(type: string): string {
+    switch (type) {
+      case 'success': return 'check-circle';
+      case 'error': return 'exclamation-circle';
+      case 'warning': return 'exclamation-triangle';
+      default: return 'info-circle';
+    }
+  }
+
+  private getNotificationColor(type: string): string {
+    switch (type) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      case 'warning': return '#f59e0b';
+      default: return '#3b82f6';
+    }
   }
 }

@@ -150,7 +150,7 @@
               <h3 class="table-title">My Job Offers</h3>
               <div class="table-actions" *ngIf="jobsSelection.selected.length > 0">
                 <span class="selection-info">{{ jobsSelection.selected.length }} selected</span>
-                <button class="btn btn-outline" (click)="bulkToggleStatus()">
+                <button class="btn btn-outline" > <!--  (click)="bulkToggleStatus()"-->
                   <i class="fas fa-toggle-on"></i>
                   Toggle Status
                 </button>
@@ -247,9 +247,7 @@
                         <button class="btn-icon" (click)="viewApplications(job)" title="View Applications">
                           <i class="fas fa-users"></i>
                         </button>
-                        <button class="btn-icon" (click)="duplicateJob(job)" title="Duplicate Job">
-                          <i class="fas fa-copy"></i>
-                        </button>
+            
                         <button class="btn-icon danger" (click)="deleteJob(job)" title="Delete Job">
                           <i class="fas fa-trash"></i>
                         </button>
