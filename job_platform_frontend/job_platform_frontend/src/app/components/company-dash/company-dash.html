@@ -196,10 +196,7 @@
                         <span class="stat-badge applications" (click)="viewApplications(job)" title="View Applications">
                           {{ job.applicationCount || 0 }}
                         </span>
-                        <div class="application-breakdown" *ngIf="job.applicationCount > 0">
-                          <small class="pending">{{ job.pendingApplications || 0 }} pending</small>
-                          <small class="accepted">{{ job.acceptedApplications || 0 }} accepted</small>
-                        </div>
+                        
                       </div>
                     </td>
                     <td>
@@ -670,7 +667,6 @@
                       <td>
                         <div class="job-title-cell">
                           <strong>{{ job.title }}</strong>
-                          <span class="job-type">{{ formatJobType(job.jobType) }}</span>
                         </div>
                       </td>
                       <td>
