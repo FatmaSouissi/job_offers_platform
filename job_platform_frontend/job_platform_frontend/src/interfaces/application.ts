@@ -6,4 +6,6 @@ export interface Application {
   appliedAt: Date;
   coverLetter?: string;
   resume?: string;
+  createdAt: string;
+  updatedAt: string;
 }

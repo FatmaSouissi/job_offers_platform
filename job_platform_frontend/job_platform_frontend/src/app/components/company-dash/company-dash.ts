@@ -62,8 +62,6 @@ interface JobStatistics {
   expiredJobs: JobOffer[];
 }
 
-
-
 // Simple selection model for pure HTML/TypeScript
 class SelectionModel<T> {
   selected: T[] = [];
@@ -155,7 +153,6 @@ analyticsData: {
   rejectedApplications: 0
 };
 
-  
   // User and company info
   currentUser: User | null = null;
   companyInfo: Company | null = null;
@@ -275,7 +272,6 @@ analyticsData: {
     this.loading = false;
   }
   }
-
 
   private async loadCompanyInfo(): Promise<void> {
     try {
@@ -423,23 +419,9 @@ analyticsData: {
     this.showNotification('Error loading dashboard statistics', 'error');
     this.dashboardCards = this.getDefaultDashboardCards();
   }
-}
-
-
-  // sync dashboard cards with analytics data
-private syncDashboardWithAnalytics(): void {
-  // Update dashboard cards to match analytics data
-  if (this.analyticsData && this.dashboardCards.length > 0) {
-    this.dashboardCards[0].value = this.analyticsData.totalJobs;
-    this.dashboardCards[1].value = this.analyticsData.activeJobs;
-    this.dashboardCards[2].value = this.analyticsData.totalApplications;
-    this.dashboardCards[3].value = this.analyticsData.pendingApplications;
-    this.dashboardCards[4].value = this.analyticsData.acceptedApplications;
-    this.dashboardCards[5].value = this.analyticsData.inactiveJobs;
   }
-}
-
-
+  
+  // sync dashboard cards with analytics data
   private getDefaultDashboardCards(): DashboardCard[] {
     return [
       { title: 'Total Job Offers', value: 0, icon: 'briefcase', color: '#667eea' },
@@ -580,7 +562,9 @@ private syncDashboardWithAnalytics(): void {
     }
   }
 
-  // Enhanced job status management using specific API endpoints
+
+
+  // Activate job status 
   async activateJob(job: JobWithApplications): Promise<void> {
     try {
       const response = await firstValueFrom(this.jobService.activateJob(job.id));
@@ -594,7 +578,7 @@ private syncDashboardWithAnalytics(): void {
       this.showNotification('Error activating job', 'error');
     }
   }
-
+ // Desactivate job status
   async deactivateJob(job: JobWithApplications): Promise<void> {
     try {
       const response = await firstValueFrom(this.jobService.deactivateJob(job.id));
@@ -609,7 +593,7 @@ private syncDashboardWithAnalytics(): void {
     }
   }
 
-  // Use the specific status update API
+  // Use the specific status update 
   async updateJobStatus(job: JobWithApplications, isActive: boolean): Promise<void> {
     try {
       const response = await firstValueFrom(
@@ -630,7 +614,7 @@ private syncDashboardWithAnalytics(): void {
     }
   }
 
-  // Get job status using specific API
+  // Get job status 
   async checkJobStatus(jobId: number): Promise<void> {
     try {
       const response = await firstValueFrom(this.jobService.getJobStatus(jobId));
@@ -813,13 +797,13 @@ private syncDashboardWithAnalytics(): void {
     }
   }
 
-  // Enhanced filter applications
+  // filter applications
   applyJobFilters(): void {
     this.currentPage = 1;
     this.loadJobs();
   }
 
-  // Enhanced clear filters
+  // clear filters
   clearJobFilters(): void {
     this.searchTerm = '';
     this.selectedJobType = '';
@@ -867,7 +851,6 @@ private syncDashboardWithAnalytics(): void {
     this.applyJobFilters();
   }
 
-  // Rest of the existing methods remain the same...
   private calculateApplicationStats(applications: DetailedApplication[]) {
     const stats = {
       applicationCount: applications.length,
@@ -1041,24 +1024,14 @@ private syncDashboardWithAnalytics(): void {
     this.router.navigate(['/company/jobs/create']);
   }
 
-  editJob(job: JobWithApplications): void {
-    this.router.navigate(['/company/jobs/edit', job.id]);
+editJob(job: JobOffer): void {
+  console.log('Editing job:', job);
+  if (!job.id) {
+    alert('Error: Job ID not found');
+    return;
   }
-
-  duplicateJob(job: JobWithApplications): void {
-    // Create a copy of the job without id and with modified title
-    const jobCopy = {
-      ...job,
-      title: `${job.title} (Copy)`,
-      createdAt: undefined,
-      updatedAt: undefined
-    };
-    delete (jobCopy as any).id;
-    
-    this.router.navigate(['/company/jobs/create'], { 
-      state: { jobData: jobCopy } 
-    });
-  }
+  this.router.navigate(['/company/jobs/edit', job.id]);
+}
 
   async deleteJob(job: JobWithApplications): Promise<void> {
     if (!confirm(`Are you sure you want to delete "${job.title}"?`)) {
@@ -1077,11 +1050,11 @@ private syncDashboardWithAnalytics(): void {
     }
   }
 
-  viewApplications(job: JobWithApplications): void {
-    this.selectedJobFilter = job.id.toString();
-    this.selectTab(1);
-    this.applyApplicationFilters();
-  }
+  viewApplications(job: JobOffer): void {
+  console.log('Viewing applications for job:', job);
+  this.router.navigate(['/company/jobs', job.id, 'applications']);
+}
+
 
   // Application filters
   applyApplicationFilters(): void {
@@ -1225,7 +1198,7 @@ private syncDashboardWithAnalytics(): void {
   }
 
  /* Load and calculate analytics data */
- private async loadAnalyticsData(): Promise<void> {
+  private async loadAnalyticsData(): Promise<void> {
   try {
     if (!this.companyInfo?.id) {
       await this.loadCompanyInfo();
@@ -1239,56 +1212,155 @@ private syncDashboardWithAnalytics(): void {
     const companyId = parseInt(this.companyInfo.id);
     console.log(`Loading analytics data for company ID: ${companyId} (${this.companyInfo.companyName || 'Unknown Company'})`);
 
-    // Load job statistics specifically for this company
-    const [activeJobsResponse, inactiveJobsResponse] = await Promise.all([
-      firstValueFrom(this.jobService.getCompanyActiveJobs(companyId)).catch(() => null),
-      firstValueFrom(this.jobService.getCompanyInactiveJobs(companyId)).catch(() => null)
-    ]);
-
-    const activeJobs = activeJobsResponse?.data || [];
-    const inactiveJobs = inactiveJobsResponse?.data || [];
-
-    // Filter jobs to ensure they belong to current company (double-check)
-    const currentCompanyActiveJobs = activeJobs.filter(job => job.companyId === companyId);
-    const currentCompanyInactiveJobs = inactiveJobs.filter(job => job.companyId === companyId);
-
-    // Load application statistics specifically for this company
-    const applicationsResponse = await firstValueFrom(
-      this.applicationService.getApplicationsByCompany(companyId, 1, 1000)
-    ).catch(() => null);
-
-    const applications = applicationsResponse?.data || [];
-
-    // Filter applications to ensure they're for jobs from current company
-    const currentCompanyApplications = applications.filter(app => 
-      app.job && app.job.companyId === companyId
-    );
-
-    // Calculate analytics data - this will match the dashboard cards
-    this.analyticsData = {
-      totalJobs: currentCompanyActiveJobs.length + currentCompanyInactiveJobs.length,
-      activeJobs: currentCompanyActiveJobs.length,
-      inactiveJobs: currentCompanyInactiveJobs.length,
-      totalApplications: currentCompanyApplications.length,
-      pendingApplications: currentCompanyApplications.filter(app => app.status === 'pending').length,
-      reviewedApplications: currentCompanyApplications.filter(app => app.status === 'reviewed').length,
-      acceptedApplications: currentCompanyApplications.filter(app => app.status === 'accepted').length,
-      rejectedApplications: currentCompanyApplications.filter(app => app.status === 'rejected').length
+    // Load all jobs for this company using the jobs service with company filter
+    const allJobsFilters: JobFilters = {
+      companyId: companyId,
+      page: 1,
+      limit: 1000 // Get all jobs for this company
     };
 
-    console.log(`Analytics data loaded for company "${this.companyInfo.companyName || companyId}":`, {
+    const jobsResponse = await firstValueFrom(
+      this.jobService.getJobs(allJobsFilters)
+    ).catch(() => null);
+
+    let allJobs: JobOffer[] = [];
+    if (jobsResponse?.success && jobsResponse.data) {
+      // Filter jobs to ensure they belong to current company
+      allJobs = jobsResponse.data.filter(job => job.companyId === companyId);
+    }
+
+    // Separate active and inactive jobs
+    const activeJobs = allJobs.filter(job => job.isActive);
+    const inactiveJobs = allJobs.filter(job => !job.isActive);
+
+    console.log(`Found ${allJobs.length} total jobs (${activeJobs.length} active, ${inactiveJobs.length} inactive)`);
+
+    // Load all applications for this company using the applications service
+    const applicationsResponse = await firstValueFrom(
+      this.applicationService.getAllApplications({
+        companyId: companyId,
+        page: 1,
+        limit: 1000 // Get all applications for this company
+      })
+    ).catch(() => null);
+
+    let allApplications: DetailedApplication[] = [];
+    if (applicationsResponse?.success && applicationsResponse.data) {
+      // Filter applications to ensure they're for jobs from current company
+      allApplications = applicationsResponse.data.filter(app => 
+        app.job && app.job.companyId === companyId
+      );
+    }
+
+    console.log(`Found ${allApplications.length} applications for company jobs`);
+
+    // Alternative: If the above doesn't work, try using getApplicationsByCompany
+    if (allApplications.length === 0) {
+      try {
+        const companyAppsResponse = await firstValueFrom(
+          this.applicationService.getApplicationsByCompany(companyId, 1, 1000)
+        );
+        
+        if (companyAppsResponse?.success && companyAppsResponse.data) {
+          allApplications = companyAppsResponse.data;
+          console.log(`Found ${allApplications.length} applications using getApplicationsByCompany`);
+        }
+      } catch (error) {
+        console.error('Error loading applications by company:', error);
+      }
+    }
+
+    // Calculate application statistics by status
+    const pendingApplications = allApplications.filter(app => app.status === 'pending');
+    const reviewedApplications = allApplications.filter(app => app.status === 'reviewed');
+    const acceptedApplications = allApplications.filter(app => app.status === 'accepted');
+    const rejectedApplications = allApplications.filter(app => app.status === 'rejected');
+
+    // Update analytics data with actual calculated values
+    this.analyticsData = {
+      totalJobs: allJobs.length,
+      activeJobs: activeJobs.length,
+      inactiveJobs: inactiveJobs.length,
+      totalApplications: allApplications.length,
+      pendingApplications: pendingApplications.length,
+      reviewedApplications: reviewedApplications.length,
+      acceptedApplications: acceptedApplications.length,
+      rejectedApplications: rejectedApplications.length
+    };
+
+    console.log(`Analytics data calculated for company "${this.companyInfo.companyName || companyId}":`, {
       companyId,
-      totalJobs: this.analyticsData.totalJobs,
-      activeJobs: this.analyticsData.activeJobs,
-      inactiveJobs: this.analyticsData.inactiveJobs,
-      totalApplications: this.analyticsData.totalApplications,
+      analyticsData: this.analyticsData,
       breakdown: {
-        pending: this.analyticsData.pendingApplications,
-        reviewed: this.analyticsData.reviewedApplications,
-        accepted: this.analyticsData.acceptedApplications,
-        rejected: this.analyticsData.rejectedApplications
+        totalJobs: {
+          active: activeJobs.length,
+          inactive: inactiveJobs.length,
+          total: allJobs.length
+        },
+        applications: {
+          pending: pendingApplications.length,
+          reviewed: reviewedApplications.length,
+          accepted: acceptedApplications.length,
+          rejected: rejectedApplications.length,
+          total: allApplications.length
+        }
       }
     });
+
+    // Try to get additional statistics using the application statistics API
+    try {
+      const statsResponse = await firstValueFrom(
+        this.applicationService.getApplicationStatistics(companyId)
+      );
+      
+      if (statsResponse?.success && statsResponse.data) {
+        console.log('Additional application statistics:', statsResponse.data);
+        
+        // If the API returns different data structure, merge it with our calculated data
+        if (statsResponse.data.totalApplications !== undefined) {
+          // Update with API data if it provides more accurate numbers
+          this.analyticsData.totalApplications = statsResponse.data.totalApplications || this.analyticsData.totalApplications;
+        }
+        
+        if (statsResponse.data.statusBreakdown) {
+          const breakdown = statsResponse.data.statusBreakdown;
+          this.analyticsData.pendingApplications = breakdown.pending || this.analyticsData.pendingApplications;
+          this.analyticsData.reviewedApplications = breakdown.reviewed || this.analyticsData.reviewedApplications;
+          this.analyticsData.acceptedApplications = breakdown.accepted || this.analyticsData.acceptedApplications;
+          this.analyticsData.rejectedApplications = breakdown.rejected || this.analyticsData.rejectedApplications;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading application statistics (using calculated data):', error);
+    }
+
+    // Try to get job statistics using the job statistics API
+    try {
+      const jobStatsResponse = await firstValueFrom(
+        this.jobService.getCompanyJobStatistics(companyId)
+      );
+      
+      if (jobStatsResponse?.success && jobStatsResponse.data) {
+        console.log('Additional job statistics:', jobStatsResponse.data);
+        
+        // If the API returns different data structure, merge it with our calculated data
+        if (jobStatsResponse.data.totalJobs !== undefined) {
+          this.analyticsData.totalJobs = jobStatsResponse.data.totalJobs || this.analyticsData.totalJobs;
+        }
+        
+        if (jobStatsResponse.data.activeJobs !== undefined) {
+          this.analyticsData.activeJobs = jobStatsResponse.data.activeJobs || this.analyticsData.activeJobs;
+        }
+        
+        if (jobStatsResponse.data.inactiveJobs !== undefined) {
+          this.analyticsData.inactiveJobs = jobStatsResponse.data.inactiveJobs || this.analyticsData.inactiveJobs;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading job statistics (using calculated data):', error);
+    }
+
+    console.log('Final analytics data:', this.analyticsData);
 
   } catch (error) {
     console.error('Error loading analytics data:', error);
@@ -1305,8 +1377,6 @@ private syncDashboardWithAnalytics(): void {
     };
   }
 }
-
-
 
   /* Get analytics statistic by key */
   getAnalyticsStat(key: string): number {
@@ -1343,9 +1413,7 @@ private syncDashboardWithAnalytics(): void {
     return Math.round((this.analyticsData.totalApplications / this.analyticsData.totalJobs) * 10) / 10;
 }
 
-/**
- * Get acceptance rate percentage
- */
+/* Get acceptance rate percentage */
 getAcceptanceRate(): number {
   if (this.analyticsData.totalApplications === 0) return 0;
   return Math.round((this.analyticsData.acceptedApplications / this.analyticsData.totalApplications) * 100);
@@ -1428,7 +1496,7 @@ async refreshAnalytics(): Promise<void> {
       this.loadApplications(),
       this.loadEnhancedDashboardCards() // Refresh dashboard cards too
     ]);
-    this.syncDashboardWithAnalytics(); // Ensure sync
+     
     this.showNotification('Analytics refreshed successfully', 'success');
   } catch (error) {
     console.error('Error refreshing analytics:', error);
@@ -1438,7 +1506,7 @@ async refreshAnalytics(): Promise<void> {
   }
 }
 
-// Add method to refresh analytics when switching tabs
+// refresh analytics when switching tabs
 selectTabs(index: number): void {
   this.selectedTab = index;
   
@@ -1493,10 +1561,6 @@ private generateAnalyticsCSV(reportData: any): string {
     row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(',')
   ).join('\n');
 }
-
-
-  
-
 
 
   // Jobs pagination

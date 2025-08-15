@@ -26,6 +26,8 @@ import { JobSeekerDash } from './components/job-seeker-dash/job-seeker-dash';
 import { CompanyDash } from './components/company-dash/company-dash';
 import { AuthGuard } from '../guards/auth.guard';
 import { AdminGuard } from '../guards/admin.guard';
+import { EditJob } from './components/edit-job/edit-job';
+import { Applicants } from './components/applicants/applicants';
 
 // Define your routes
 const routes: Routes = [
@@ -34,7 +36,6 @@ const routes: Routes = [
   { path: 'jobs', component: JobsComponent },
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },
-  //{ path: 'profile', component: Profile },
   { path: 'job-details/:id', component: JobDetailsComponent },
   { path: 'companies', component: Companies },
   { path: 'company/:id', component: CompanyDetails },
@@ -48,8 +49,6 @@ const routes: Routes = [
       requiresAuth: true 
     }
   },
-
-  
   {
     path: 'admin-dash',
     component: AdminDash,
@@ -71,8 +70,6 @@ const routes: Routes = [
       roles: ['job_seeker'] 
     }
   },
-
-
   {
     path: 'company-dash',
     component: CompanyDash, 
@@ -83,7 +80,17 @@ const routes: Routes = [
       roles: ['company'] 
     }
   },
+   {
+    path: 'company/jobs/edit/:id',
+    component: EditJob,
+    canActivate: [AuthGuard]
+  },
 
+   {
+    path: 'company/jobs/:jobId/applications',
+    component: Applicants,
+    canActivate: [AuthGuard]
+  },
   
   
   { path: '**', redirectTo: '' } 
@@ -102,6 +109,8 @@ const routes: Routes = [
     JobDetailsComponent,
     ApplicationComponent,
     JobSeekerDash,
+    EditJob,
+    Applicants,
     
     
   ],
@@ -118,8 +127,6 @@ const routes: Routes = [
     AdminDash,
     CompanyDash,
     
-
-         
     RouterModule.forRoot(routes),
   ],
   providers: [
